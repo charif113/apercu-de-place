@@ -302,9 +302,7 @@ export class SeatPlan {
 
     if (detail !== 'seats') this._drawAreas(detail, px);
 
-    // régie (emplacement fixe)
-    ctx.fillStyle = col('--plan-regie', 'rgba(140,150,170,.22)');
-    for (const p of venue.regie.parts) ctx.fillRect(p.x0, p.z0, p.x1 - p.x0, p.z1 - p.z0);
+    this._drawRegie(px, col('--plan-regie', 'rgba(140,150,170,.22)'));
 
     // garde-corps
     ctx.globalAlpha = detail === 'zones' ? 0.26 : 1;
@@ -361,29 +359,7 @@ export class SeatPlan {
     const fs = (n) => `${n}px system-ui, -apple-system, "Segoe UI", sans-serif`;
     this.labelHits = [];
     if (detail !== 'seats') this._drawAreaLabels(detail, w, h);
-    if (detail === 'seats') {
-      // numéros de rang au bout des rangées
-      ctx.font = `700 ${fs(11)}`;
-      const stride = Math.max(1, Math.ceil(12 / (v.s * 0.78)));
-      const drawnRows = new Map();
-      for (const list of this.rows) {
-        const a = list[0];
-        if (a.pmr || a.companion || a.row % stride !== 0) continue;
-        const first = this.toScreen(a.x - 0.62, a.z);
-        const last = list.at(-1);
-        const p = first.x >= 6 ? first : this.toScreen(last.x + 0.62, last.z);
-        if (p.x < 6 || p.x > w - 6 || p.y < 5 || p.y > h - 5) continue;
-        const row = drawnRows.get(a.row) || [];
-        if (row.some(({ x, y }) => Math.abs(p.x - x) < 13 && Math.abs(p.y - y) < 15)) continue;
-        row.push(p);
-        drawnRows.set(a.row, row);
-        ctx.strokeStyle = '#111321';
-        ctx.lineWidth = 3;
-        ctx.strokeText(String(a.row), p.x, p.y);
-        ctx.fillStyle = col('--plan-row', '#c9cfdb');
-        ctx.fillText(String(a.row), p.x, p.y);
-      }
-    }
+    if (detail === 'seats') this._drawRowLabels(w, h, col('--plan-row', '#c9cfdb'));
     if (numbered) {
       ctx.font = `750 ${fs(Math.min(12, Math.round(pitch * 0.39)))}`;
       for (const s of numbered) {
@@ -416,8 +392,92 @@ export class SeatPlan {
       ctx.fillText('Scène', cx + 8, cy + 0.5);
       this.stageBadge = { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh };
     }
+    if (detail !== 'zones') this._drawRegieLabel(w, h);
     this.root.classList.toggle('plan-zoomed', pitch >= MIN_TAP_PX);
     this.onViewChange?.(this.zoomLevel());
+  }
+
+  _drawRegie(px, fill) {
+    const { ctx } = this;
+    const outline = new Path2D();
+    const spacing = 9 * px;
+    ctx.save();
+    for (const { x0, z0, x1, z1 } of this.venue.regie.parts) outline.rect(x0, z0, x1 - x0, z1 - z0);
+    ctx.fillStyle = fill;
+    ctx.fill(outline);
+    ctx.clip(outline);
+    ctx.strokeStyle = '#a9b6d3';
+    ctx.globalAlpha = 0.34;
+    ctx.lineWidth = px;
+    ctx.beginPath();
+    for (const { x0, z0, x1, z1 } of this.venue.regie.parts) {
+      const depth = z1 - z0;
+      // Une même grille diagonale traverse les deux paliers.
+      for (let offset = Math.ceil((x0 + z0) / spacing) * spacing; offset < x1 + z1; offset += spacing) {
+        ctx.moveTo(offset - z0, z0);
+        ctx.lineTo(offset - z0 - depth, z1);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = '#8390ad';
+    ctx.lineWidth = px;
+    ctx.stroke(outline);
+  }
+
+  _drawRegieLabel(w, h) {
+    const { ctx, stageBadge } = this;
+    ctx.font = '750 12px system-ui, sans-serif';
+    const width = ctx.measureText('Régie').width + 18, height = 22;
+    let best;
+    for (const { x0, z0, x1, z1 } of this.venue.regie.parts) {
+      const a = this.toScreen(x0, z0), b = this.toScreen(x1, z1);
+      const left = Math.max(4, a.x), right = Math.min(w - 4, b.x);
+      const sharesStageColumn = stageBadge && left < stageBadge.x + stageBadge.w && right > stageBadge.x;
+      const top = Math.max(a.y, sharesStageColumn ? stageBadge.y + stageBadge.h + 4 : 4);
+      const bottom = Math.min(h - 4, b.y);
+      if (right - left < width || bottom - top < height) continue;
+      const area = (right - left) * (bottom - top);
+      if (!best || area > best.area) best = { x: (left + right) / 2, y: (top + bottom) / 2, area };
+    }
+    if (!best) return;
+    ctx.beginPath();
+    ctx.roundRect(best.x - width / 2, best.y - height / 2, width, height, 5);
+    ctx.fillStyle = '#1e2438';
+    ctx.fill();
+    ctx.strokeStyle = '#8390ad';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#e5eafa';
+    ctx.fillText('Régie', best.x, best.y);
+  }
+
+  _drawRowLabels(w, h, color) {
+    const { ctx, view: { s } } = this;
+    ctx.font = '700 11px system-ui, sans-serif';
+    ctx.strokeStyle = '#111321';
+    ctx.fillStyle = color;
+    ctx.lineWidth = 3;
+    const stride = Math.max(1, Math.ceil(12 / (s * 0.78)));
+    const drawn = [];
+    for (const list of this.rows) {
+      const first = list[0], last = list.at(-1);
+      const { row } = first;
+      if (first.pmr || first.companion || row % stride !== 0) continue;
+      const label = String(row), radius = ctx.measureText(label).width / 2 + 3;
+      const visible = ({ x, y }) => x >= radius && x <= w - radius && y >= 7 && y <= h - 7;
+      const p = [this.toScreen(first.x - 0.62, first.z), this.toScreen(last.x + 0.62, last.z)].find(visible);
+      if (!p) continue;
+      // Les deux blocs d'une même allée peuvent présenter le même numéro à ses bords.
+      const crowded = drawn.some(({ x, y, row: other, radius: otherRadius }) => {
+        const dx = Math.abs(p.x - x), dy = Math.abs(p.y - y);
+        return (dx < radius + otherRadius && dy < 13) || (row === other && dx < s * 0.9 && dy < s * 0.35);
+      });
+      if (crowded) continue;
+      drawn.push({ ...p, row, radius });
+      ctx.strokeText(label, p.x, p.y);
+      ctx.fillText(label, p.x, p.y);
+    }
   }
 
   _drawAreas(detail, px) {

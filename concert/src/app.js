@@ -110,7 +110,7 @@ function show(step, push) {
   if (step === 'stepDate') updateShowtimes();
 }
 
-async function openSeatModule({ push = true, focus = true, preview = false, guided = false, preset = null } = {}) {
+async function openSeatModule({ push = true, focus = true, preview = false, guided = false, preset = null, linkedSeat = false } = {}) {
   const request = ++seatRequest;
   show('stepSeat', push);
   const loading = $('planStatus'), retry = $('retryPlan');
@@ -125,7 +125,7 @@ async function openSeatModule({ push = true, focus = true, preview = false, guid
     loading.hidden = false;
     $('planStatusText').textContent = 'Le plan est momentanément indisponible.';
     retry.hidden = false;
-    retry.onclick = () => openSeatModule({ push: false, focus, preview, guided, preset });
+    retry.onclick = () => openSeatModule({ push: false, focus, preview, guided, preset, linkedSeat });
     return;
   }
   if (request !== seatRequest || document.body.dataset.step !== 'stepSeat') return;
@@ -143,6 +143,7 @@ async function openSeatModule({ push = true, focus = true, preview = false, guid
       context: { title: CONCERT.artist, subtitle: `${state.showtime.label} · ${state.showtime.time}`, showtimeId: state.showtime.id },
       initialSeatId: state.seatId,
       initialView: view,
+      initialMode: linkedSeat && state.seatId ? 'concert' : undefined,
       onPreviewSeatChange: (seatId) => {
         state.seatId = seatId;
         updateNavigation();
@@ -161,9 +162,9 @@ async function openSeatModule({ push = true, focus = true, preview = false, guid
     window.__demo = { module, venue, availability };
     updateUrl();
   }
-  if (guided) return module.openGuidedComparison();
+  if (guided) return module.openGuidedComparison({ mode: 'concert' });
   if (preset) return module.openPreset(preset);
-  if (preview && state.seatId) return module.open(state.seatId);
+  if (preview && state.seatId) return module.open(state.seatId, 'A', { mode: 'concert' });
   else if (focus) module.plan.canvas.focus({ preventScroll: true });
 }
 
@@ -189,7 +190,7 @@ function urlFor(step) {
   url.hash = '';
   const p = url.searchParams;
   p.set('seance', state.showtime.id);
-  if (state.seatId) p.set('place', state.seatId);
+  if (state.seatId && step !== 'stepShow') p.set('place', state.seatId);
   if (step === 'stepSeat') p.set('etape', 'place');
   if (step === 'stepDate') p.set('etape', 'date');
   if (params.get('vue') === 'fixe') p.set('vue', 'fixe');
@@ -237,8 +238,11 @@ for (const button of document.querySelectorAll('[data-home-preset]')) {
 wideHome.addEventListener('change', () => { if (document.body.dataset.step === 'stepShow') loadHomeArt(); });
 window.addEventListener('popstate', (event) => navigate(event.state?.concertStep, { push: false }));
 const guided = params.get('comparer') === '1';
-if (params.get('etape') === 'place' || params.get('apercu') === '1' || guided) {
-  openSeatModule({ push: false, focus: false, preview: params.get('apercu') === '1', guided });
+const preview = params.get('apercu') === '1';
+const step = params.get('etape');
+const linkedSeat = Boolean(state.seatId) && (!step || step === 'place');
+if (step === 'place' || linkedSeat || preview || guided) {
+  openSeatModule({ push: false, focus: false, preview, guided, linkedSeat });
 } else {
-  navigate(params.get('etape') === 'date' ? 'stepDate' : 'stepShow', { push: false, focus: false });
+  navigate(step === 'date' ? 'stepDate' : 'stepShow', { push: false, focus: false });
 }

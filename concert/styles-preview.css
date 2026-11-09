@@ -1,5 +1,7 @@
 /* Raccourcis du plan, choix et commandes de la vue depuis une place. */
 .sp-estimate, .v3-estimate { margin: 5px 0 1px; color: var(--muted); font-size: 11px; }
+.actions.actions-sold { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.actions-sold .btn { padding-inline: 8px; }
 .sp-recommendation { display: none; }
 .sp-legend-shell { min-width: 0; }
 .sp-legend-cue { display: none; }

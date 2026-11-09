@@ -6,6 +6,7 @@
 //     categoryOf, categories,        // catégories et tarifs (ici simulés)
 //     context: { title, subtitle },
 //     initialSeatId,                 // facultatif
+//     initialMode: 'concert',        // facultatif, salle vide par défaut
 //     onSelect(seatId),              // renvoie l'identifiant du siège choisi
 //     onCancel(),
 //   });
@@ -60,7 +61,8 @@ export function mountSeatPreview(root, opts) {
   const forceFixed = params.get('vue') === 'fixe';
   const state = {
     selected: null, compare: null, active: 'A', zone: null, category: null,
-    tourGear: true, mode: 'empty', noMotion: matchMedia('(prefers-reduced-motion: reduce)').matches || localStorageGet('noMotion') === '1',
+    tourGear: true, mode: opts.initialMode === 'concert' ? 'concert' : 'empty',
+    noMotion: matchMedia('(prefers-reduced-motion: reduce)').matches || localStorageGet('noMotion') === '1',
   };
   document.documentElement.classList.toggle('no-motion', state.noMotion);
   // ----- squelette -----------------------------------------------------------
@@ -160,7 +162,7 @@ export function mountSeatPreview(root, opts) {
     return openPreview(preset.seat);
   }
 
-  function openGuidedComparison() {
+  function openGuidedComparison(options) {
     if (!v3.el.hidden) return;
     const presets = choosePresets(venue, taken);
     const A = presets.find((item) => item.key === 'lateral')?.seat;
@@ -174,7 +176,7 @@ export function mountSeatPreview(root, opts) {
     state.compare = B.id;
     select(A, { silent: true });
     renderPresets();
-    return openPreview(A);
+    return openPreview(A, 'A', options);
   }
 
   function describe(s, short = false) {
@@ -242,7 +244,22 @@ export function mountSeatPreview(root, opts) {
     const m = seatMetrics(venue, s);
     const c = categories[categoryOf(s)];
     const isTaken = taken.has(s.id);
+    const neighbor = isTaken ? nearestFreeSeat(s) : null;
     const mk = obstructions(venue, s, { tourGear: state.tourGear });
+    const selectAction = isTaken ? () => {
+      if (neighbor) {
+        select(neighbor);
+        if (v3.el.hidden) {
+          plan.centerOn(neighbor, 14);
+          root.querySelector('#spOpen')?.focus({ preventScroll: true });
+        }
+      } else if (onCancel) {
+        onCancel();
+      } else {
+        goZone(null);
+        plan.canvas.focus({ preventScroll: true });
+      }
+    } : () => confirm(s);
     sheet.append(...[
       h('div', { class: 'seat-id' }, h('span', { class: 'pill' }, 'A'), h('strong', {}, seatLabel(s))),
       h('p', { class: 'seat-meta' }, `${zoneLabel(s)} · `, h('span', { style: `color:${c.color}` }, `${c.label} · ${c.price} € démo`), isTaken ? h('span', { class: 'sold' }, ' · Vendue') : null),
@@ -253,11 +270,27 @@ export function mountSeatPreview(root, opts) {
       ),
       maskText(mk) ? h('p', { class: 'warn' }, maskText(mk)) : null,
       h('p', { class: 'sp-estimate', id: 'spEstimate' }, 'Vue simulée · hauteurs estimées'),
-      h('div', { class: 'actions' },
+      h('div', { class: isTaken ? 'actions actions-sold' : 'actions' },
         h('button', { type: 'button', class: 'btn primary', id: 'spOpen', onclick: () => openPreview(s) }, 'Voir depuis cette place'),
-        h('button', { type: 'button', class: 'btn ghost', id: 'spConfirm', 'aria-describedby': 'spEstimate', disabled: isTaken, onclick: () => confirm(s) }, isTaken ? 'Place vendue' : 'Choisir'),
+        h('button', { type: 'button', class: 'btn ghost', id: 'spConfirm', 'aria-describedby': 'spEstimate', onclick: selectAction },
+          neighbor ? neighborLabel(neighbor) : isTaken ? (onCancel ? 'Changer de date' : 'Voir tout le plan') : 'Choisir'),
       ),
     ].filter(Boolean));
+  }
+
+  function nearestFreeSeat(seat) {
+    let closest = null, closestInRow = false, closestDistance = Infinity;
+    for (const candidate of venue.seats) {
+      if (taken.has(candidate.id) || candidate.pmr !== seat.pmr || candidate.companion !== seat.companion) continue;
+      const sameRow = candidate.tier === seat.tier && candidate.block === seat.block && candidate.row === seat.row;
+      if (closestInRow && !sameRow) continue;
+      const distance = Math.hypot(candidate.x - seat.x, candidate.y - seat.y, candidate.z - seat.z);
+      if (sameRow === closestInRow && distance >= closestDistance) continue;
+      closest = candidate;
+      closestInRow = sameRow;
+      closestDistance = distance;
+    }
+    return closest;
   }
 
   function suggestedSeat() {
@@ -443,7 +476,7 @@ export function mountSeatPreview(root, opts) {
     const tg = h('input', { type: 'checkbox', checked: true, onchange: (e) => { state.tourGear = e.target.checked; layer.view?.setTourGear(state.tourGear); refreshInfo(); } });
     const nm = h('input', { type: 'checkbox', onchange: (e) => { setNoMotion(e.target.checked); } });
     const info = h('div', { class: 'v3-info' });
-    const choose = h('button', { type: 'button', class: 'btn primary', id: 'v3Choose', 'aria-describedby': 'v3Estimate', onclick: () => { const s = currentSeat(); if (s) { close(); select(s, { silent: true }); confirm(s); } } }, 'Choisir cette place');
+    const choose = h('button', { type: 'button', class: 'btn primary', id: 'v3Choose', 'aria-describedby': 'v3Estimate', onclick: chooseActiveSeat }, 'Choisir cette place');
     const closeBtn = h('button', { type: 'button', class: 'v3-close', id: 'v3Back', 'aria-label': 'Retour au plan', onclick: () => close() }, '‹ Plan');
     const recenter = h('button', { type: 'button', class: 'v3-round', 'aria-label': 'Recentrer le regard sur l’artiste', onclick: () => layer.view?.recenter() }, '◎');
     const skip = h('button', { type: 'button', class: 'v3-skip', id: 'v3Skip', 'aria-label': 'Passer la plongée', onclick: () => {
@@ -490,7 +523,7 @@ export function mountSeatPreview(root, opts) {
         nm.checked = state.noMotion;
         for (const button of modes.children) button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode));
       },
-      info, label, abA, abB, abBox, cmpMenu, cmpBtn, renderComparePresets, loading, sum, mask, more,
+      info, label, choose, abA, abB, abBox, cmpMenu, cmpBtn, renderComparePresets, loading, sum, mask, more,
     };
     return layer;
   }
@@ -511,7 +544,7 @@ export function mountSeatPreview(root, opts) {
     return { x0: topLeft.x, z0: topLeft.z, x1: bottomRight.x, z1: bottomRight.z };
   }
 
-  async function openPreview(seat, side = 'A') {
+  async function openPreview(seat, side = 'A', { mode } = {}) {
     if (!seat || !v3.el.hidden || (side === 'B' && !state.compare)) return;
     if (side === 'A' && state.selected !== seat.id) select(seat, { silent: true });
     const ticket = ++viewTicket;
@@ -519,6 +552,10 @@ export function mountSeatPreview(root, opts) {
     lastFocus = document.activeElement;
     v3.el.hidden = false;
     document.body.classList.add('v3-open');
+    if ((mode === 'empty' || mode === 'concert') && state.mode !== mode) {
+      state.mode = mode;
+      v3.view?.setPreviewMode(mode);
+    }
     v3.syncToggles();
     state.active = side;
     hideCompare();
@@ -594,9 +631,10 @@ export function mountSeatPreview(root, opts) {
     const A = venue.byId.get(state.selected), B = venue.byId.get(state.compare);
     v3.abBox.hidden = !(A && B);
     v3.cmpBtn.textContent = B ? 'Changer B' : 'Comparer';
-    v3.label.textContent = `${state.active} · ${seatLabel(s)}`;
+    const isTaken = taken.has(s.id);
+    v3.label.textContent = `${state.active} · ${isTaken ? `${s.id} · Vendue` : seatLabel(s)}`;
     const m = seatMetrics(venue, s);
-    const mk = v3.view?.masks ?? obstructions(venue, s, { tourGear: state.tourGear });
+    const mk = v3.view?.seat?.id === s.id ? v3.view.masks : obstructions(venue, s, { tourGear: state.tourGear });
     const c = categories[categoryOf(s)];
     v3.info.textContent = '';
     const cells = [
@@ -617,12 +655,31 @@ export function mountSeatPreview(root, opts) {
     v3.mask.hidden = !t;
     v3.mask.textContent = t ? `Vue simulée · visibilité à confirmer. ${t}` : '';
     v3.sum.textContent = `${fmt(m.dist)} m de l’artiste · ${zoneLabel(s)}`;
-    if (taken.has(s.id)) v3.info.append(h('p', { class: 'muted' }, 'Place déjà vendue : aperçu seulement.'));
-    const ch = v3.el.querySelector('#v3Choose');
-    ch.disabled = taken.has(s.id);
-    ch.textContent = taken.has(s.id) ? 'Place vendue' : 'Choisir cette place';
+    if (isTaken) v3.info.append(h('p', { class: 'muted' }, 'Place déjà vendue : aperçu seulement.'));
+    const neighbor = isTaken ? nearestFreeSeat(s) : null;
+    v3.choose.textContent = neighbor ? neighborLabel(neighbor) : isTaken ? 'Retour au plan' : 'Choisir cette place';
     if (v3.fixed) drawFixedView(v3.still, venue, s, { taken: state.mode === 'concert' ? taken : emptyAudience, tourGear: state.tourGear, masks: mk });
     return v3.mask.textContent;
+  }
+
+  function chooseActiveSeat() {
+    const seat = currentSeat();
+    if (!seat || v3.el.matches('.is-loading, .is-flying, .is-switching')) return;
+    if (!taken.has(seat.id)) {
+      close();
+      select(seat, { silent: true });
+      confirm(seat);
+      return;
+    }
+    const neighbor = nearestFreeSeat(seat);
+    if (!neighbor) return close();
+    if (state.active === 'B') {
+      if (neighbor.id === state.selected) return showSide('A');
+      return setCompare(neighbor);
+    }
+    if (neighbor.id === state.compare) return showSide('B');
+    select(neighbor, { silent: true });
+    return showSide('A');
   }
 
   function renderComparisonSeat(button, side, seat, metrics) {
@@ -678,7 +735,7 @@ export function mountSeatPreview(root, opts) {
       if (!v3.el.hidden && !v3.el.matches('.is-loading')) refreshInfo();
       v3.view?.setAudience(taken, true);
     },
-    open: (id, side) => openPreview(venue.byId.get(id), side),
+    open: (id, side, options) => openPreview(venue.byId.get(id), side, options),
     openPreset,
     openGuidedComparison,
     compare: (id) => { state.compare = id; plan.setState({ compare: id }); },
@@ -689,6 +746,8 @@ export function mountSeatPreview(root, opts) {
 }
 
 function short(s) { return s ? (s.pmr || s.companion ? `${s.block} ${s.row} ${s.num}` : `${s.block}·${s.row}·${s.num}`) : ''; }
+
+function neighborLabel(seat) { return `Place voisine libre : ${seat.id}`; }
 
 export function maskText(mk) {
   if (mk?.nearMiss) return `Garde-corps à ${fmt(mk.nearMiss.margin * 100)} cm sous la ligne de vue estimée.`;
