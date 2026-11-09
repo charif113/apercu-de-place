@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101419">
+  <title>Billetterie de démonstration · Aperçu de place</title>
+  <link rel="stylesheet" href="booking.css">
+</head>
+<body>
+  <header class="booking-header">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 13q12-5 24 0v11q-12-5-24 0z"/><path d="M14 30h12"/></svg>
+      <strong>Billetterie</strong>
+    </div>
+    <span class="demo">Démonstration</span>
+  </header>
+  <main>
+    <nav aria-label="Étapes de la réservation">
+      <ol id="steps">
+        <li aria-current="step">Film</li><li>Séance</li><li>Place</li><li>Récapitulatif</li>
+      </ol>
+    </nav>
+    <section class="card film-card" id="film" aria-labelledby="filmTitle">
+      <div class="film-copy">
+        <p class="kicker">FILM DE L’EXEMPLE</p>
+        <h1 id="filmTitle" tabindex="-1">Dune<br><span>Troisième partie</span></h1>
+        <p>Choisissez une séance de démonstration, puis prévisualisez la salle depuis la place qui vous intéresse.</p>
+        <div class="actions">
+          <button class="primary" id="chooseScreening">Choisir une séance</button>
+          <button id="showTrailer" aria-expanded="false" aria-controls="trailer">Bande-annonce officielle</button>
+        </div>
+      </div>
+      <div id="trailer" class="trailer" hidden>
+        <div id="trailerPlayer"></div>
+        <a href="https://www.youtube.com/watch?v=9JEN4lN1wH8" target="_blank" rel="noopener noreferrer">Voir sur la chaîne Warner Bros. France</a>
+      </div>
+    </section>
+    <section class="card" id="screenings" aria-labelledby="screeningsTitle" hidden>
+      <p class="kicker">DUNE · TROISIÈME PARTIE</p>
+      <h1 id="screeningsTitle" tabindex="-1">Choisir une séance</h1>
+      <p class="note">Horaires, tarifs et disponibilités de démonstration.</p>
+      <div id="screeningOptions" class="screening-options"></div>
+      <button id="backFilm">Retour au film</button>
+    </section>
+    <section id="seats" aria-labelledby="seatsTitle" hidden>
+      <header class="card seat-header">
+        <div><h1 id="seatsTitle" tabindex="-1">Choisir une place</h1><p class="note" id="screeningContext"></p></div>
+        <button class="back" id="backScreenings">Changer de séance</button>
+      </header>
+      <p class="note" id="seatStatus" role="status">Chargement du plan…</p>
+      <div class="seat-frame" id="seatFrame"></div>
+    </section>
+    <section class="card" id="recap" aria-labelledby="recapTitle" hidden>
+      <p class="kicker">DUNE · TROISIÈME PARTIE</p>
+      <h1 id="recapTitle" tabindex="-1">Récapitulatif</h1>
+      <dl id="recapDetails"></dl>
+      <p class="note">Séance, place et tarif de démonstration. La simulation n’effectue aucun paiement.</p>
+      <div class="actions" id="recapActions">
+        <button class="primary" id="completeBooking">Simuler la réservation</button>
+        <button id="backSeats">Modifier la place</button>
+      </div>
+      <p class="confirmed" id="bookingComplete" role="status" hidden>Réservation de démonstration finalisée.</p>
+      <button id="startOver" hidden>Recommencer</button>
+    </section>
+  </main>
+  <footer>Parcours de démonstration · Billetterie indépendante du module d’aperçu</footer>
+  <script>
+    const entry = document.createElement('script');
+    const localFile = location.protocol === 'file:';
+    entry.src = localFile ? 'src/ouverture-locale.js' : 'src/booking.js';
+    if (!localFile) entry.type = 'module';
+    document.body.append(entry);
+  </script>
+</body>
+</html>

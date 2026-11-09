@@ -1,0 +1,28 @@
+html:has(.local-start-page), body.local-start-page {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  margin: 0;
+  background: #101419;
+  color: #f1f4f3;
+}
+.local-start-page {
+  display: grid;
+  place-items: start center;
+  padding: min(12vh, 96px) 16px 24px;
+  font: 16px/1.5 system-ui, sans-serif;
+}
+.local-start-page .local-start {
+  box-sizing: border-box;
+  width: min(100%, 590px);
+  max-width: none;
+  margin: 0;
+  padding: 26px;
+  border: 1px solid #303c46;
+  border-radius: 16px;
+  background: #171d24;
+}
+.local-start h1 { margin: 0 0 8px; font-size: 24px; }
+.local-start p { margin: 10px 0 0; color: #bfccd2; }
+.local-start strong { color: #a9f5d0; }
+

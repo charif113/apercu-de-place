@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101419">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Aperçu de place · Démonstration cinéma</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    { "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header class="masthead">
+      <div class="brand">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 13q12-5 24 0v11q-12-5-24 0z"/><path d="M14 30h12"/></svg>
+        <div><p class="brand-kicker">DÉMONSTRATION</p><h1>Aperçu de place</h1></div>
+      </div>
+      <nav class="masthead-links" aria-label="Présentation">
+        <a href="booking.html" class="demo-label">Billetterie démo</a>
+        <a href="presentation.html" class="demo-label pilot-link">Le pilote</a>
+      </nav>
+    </header>
+
+    <section class="stage" aria-labelledby="hallName">
+      <header class="stage-head">
+        <div class="stage-title"><p class="eyebrow">PLAN DE SALLE</p><h2 id="hallName"></h2></div>
+        <div class="stage-tools">
+          <div id="hallBadges" class="badges"></div>
+          <button type="button" id="tryScreenX" class="try-screenx" hidden>Essayer ScreenX</button>
+        </div>
+      </header>
+      <div id="planArea" class="plan-area">
+        <div class="map">
+          <div id="plan" class="plan" aria-describedby="legend"></div>
+          <button type="button" class="screen-key" id="screenKey" aria-label="Écran, revenir au plan entier">
+            <svg viewBox="0 0 20 10" aria-hidden="true"><path d="M2 7Q10 2 18 7"/></svg>Écran
+          </button>
+          <div class="zoom" role="group" aria-label="Zoom du plan">
+            <button type="button" id="zoomIn" aria-label="Zoomer">+</button>
+            <span id="zoomLevel" aria-live="polite">100 %</span>
+            <button type="button" id="zoomOut" aria-label="Dézoomer">−</button>
+            <button type="button" id="zoomFit" aria-label="Plan entier">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg>
+            </button>
+          </div>
+          <p id="tapZoomHint" class="tap-zoom-hint" role="status"></p>
+        </div>
+        <ul class="legend" id="legend">
+          <li><svg viewBox="-8 -8 16 16" aria-hidden="true"><path d="M-5 0v-3q0-2 2-2h6q2 0 2 2v3h1v5H-6V0Z" class="lg-free"/></svg>Libre</li>
+          <li><svg viewBox="-8 -8 16 16" aria-hidden="true"><path d="M-3 -3l6 6m0-6l-6 6" class="lg-x"/></svg>Prise</li>
+          <li><svg viewBox="-8 -8 16 16" aria-hidden="true"><rect x="-6" y="-6" width="12" height="12" rx="3" class="lg-sel"/><path d="M-3 0l2 2 4-4" class="lg-check"/></svg>Choisie</li>
+          <li><svg viewBox="-8 -8 16 16" aria-hidden="true"><path d="M0-7L7 0 0 7-7 0Z" class="lg-cmp"/><text y="3" class="lg-b">B</text></svg>Comparée</li>
+          <li><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="5" class="lg-pmr"/></svg>PMR</li>
+        </ul>
+      </div>
+      <section id="soon" class="soon-area" hidden>
+        <p class="badge soon">Aperçu à venir</p>
+        <h3 id="soonTitle"></h3>
+        <p class="muted">Le plan et la vue depuis le fauteuil restent à modéliser pour cette salle.</p>
+      </section>
+    </section>
+
+    <aside class="plan-panel" aria-label="Salle, séance et place">
+      <button type="button" id="planSheet" class="plan-sheet-toggle" aria-expanded="false" aria-controls="planOptions">
+        <span class="grip" aria-hidden="true"></span>
+        <span id="planSheetLabel">Salle et séance</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 12 5-5 5 5"/></svg>
+      </button>
+      <div id="planOptions" class="plan-options">
+        <section class="option" id="hallOption">
+          <h2><span>01</span>Salle</h2>
+          <div id="hallChips" aria-label="Salle">
+            <div class="chips" id="mainHalls"></div>
+            <details class="panel-details" id="otherHalls" hidden>
+              <summary>Autres salles <span class="current-hall" id="currentOtherHall" hidden></span></summary>
+              <div class="chips" id="otherHallChips"></div>
+            </details>
+          </div>
+          <details class="panel-details" id="hallDetails">
+            <summary>Infos sur la salle</summary>
+            <ul id="hallFacts" class="facts"></ul>
+            <p id="hallCount" class="hall-count"></p>
+          </details>
+        </section>
+        <section class="option" id="showtimeOption">
+          <h2><span>02</span>Séance <small>Démo</small></h2>
+          <div class="times" id="showtimes" aria-label="Séances de démonstration"></div>
+        </section>
+        <section class="option access-options">
+          <h2>Choisir par rang et numéro</h2>
+          <div class="seat-fields">
+            <label>Rang <select id="rowPicker"></select></label>
+            <label>Place <select id="seatPicker"></select></label>
+          </div>
+          <label class="access-toggle"><input type="checkbox" id="pmrOnly"> Afficher les emplacements PMR</label>
+          <label class="access-toggle"><input type="checkbox" id="noMotion"> Sans animation</label>
+        </section>
+        <p class="demo-note">Séances, disponibilités et tarifs de démonstration.</p>
+        <nav class="panel-links" aria-label="Autres pages de démonstration">
+          <a href="presentation.html">Le pilote</a>
+          <a id="otherCinema" href="?cinema=autre">Explorer un autre cinéma</a>
+        </nav>
+      </div>
+      <section class="plan-selection">
+        <h2><span>03</span>Place</h2>
+        <div class="bar" id="bar" aria-live="polite"></div>
+      </section>
+    </aside>
+  </div>
+
+  <div id="view3d" class="view3d" hidden>
+    <canvas id="gl" aria-label="Vue 3D depuis la place. Glissez pour regarder autour."></canvas>
+    <div id="stillPreview" class="still-preview" hidden></div>
+    <div class="hud">
+      <button type="button" class="round" id="back" aria-label="Retour au plan">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 5-5 5 5 5m-5-5h11"/></svg>Plan
+      </button>
+      <div class="ctx" aria-live="polite">
+        <span id="ctxCinema"></span>
+        <b id="ctxSeat"></b>
+      </div>
+      <button type="button" class="round" id="recenter" aria-label="Recentrer le regard">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5"/><path d="M10 2v4m0 8v4M2 10h4m8 0h4"/></svg>
+      </button>
+    </div>
+    <div class="seg sx" id="sxToggle" role="group" aria-label="Mode de projection ScreenX" hidden>
+      <button type="button" data-sx="0">Frontal seul</button>
+      <button type="button" data-sx="1">Étendu · côtés</button>
+    </div>
+    <p class="look-hint">Glissez pour regarder autour</p>
+    <section class="sheet" id="sheet" aria-label="Détails de la place"></section>
+  </div>
+
+  <div id="loading" class="loading" hidden>Chargement de la salle…</div>
+  <div id="toast" class="toast" role="status"></div>
+  <script>
+    const entry = document.createElement('script');
+    const localFile = location.protocol === 'file:';
+    entry.src = localFile ? 'src/ouverture-locale.js' : 'src/main.js';
+    if (!localFile) entry.type = 'module';
+    document.body.append(entry);
+  </script>
+</body>
+</html>
