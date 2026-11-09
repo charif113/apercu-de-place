@@ -110,7 +110,7 @@ function show(step, push) {
   if (step === 'stepDate') updateShowtimes();
 }
 
-async function openSeatModule({ push = true, focus = true, preview = false, guided = false, preset = null, linkedSeat = false } = {}) {
+async function openSeatModule({ push = true, focus = true, preview = false, guided = false, preset = null } = {}) {
   const request = ++seatRequest;
   show('stepSeat', push);
   const loading = $('planStatus'), retry = $('retryPlan');
@@ -125,7 +125,7 @@ async function openSeatModule({ push = true, focus = true, preview = false, guid
     loading.hidden = false;
     $('planStatusText').textContent = 'Le plan est momentanément indisponible.';
     retry.hidden = false;
-    retry.onclick = () => openSeatModule({ push: false, focus, preview, guided, preset, linkedSeat });
+    retry.onclick = () => openSeatModule({ push: false, focus, preview, guided, preset });
     return;
   }
   if (request !== seatRequest || document.body.dataset.step !== 'stepSeat') return;
@@ -143,7 +143,6 @@ async function openSeatModule({ push = true, focus = true, preview = false, guid
       context: { title: CONCERT.artist, subtitle: `${state.showtime.label} · ${state.showtime.time}`, showtimeId: state.showtime.id },
       initialSeatId: state.seatId,
       initialView: view,
-      initialMode: linkedSeat && state.seatId ? 'concert' : undefined,
       onPreviewSeatChange: (seatId) => {
         state.seatId = seatId;
         updateNavigation();
@@ -162,9 +161,9 @@ async function openSeatModule({ push = true, focus = true, preview = false, guid
     window.__demo = { module, venue, availability };
     updateUrl();
   }
-  if (guided) return module.openGuidedComparison({ mode: 'concert' });
+  if (guided) return module.openGuidedComparison();
   if (preset) return module.openPreset(preset);
-  if (preview && state.seatId) return module.open(state.seatId, 'A', { mode: 'concert' });
+  if (preview && state.seatId) return module.open(state.seatId);
   else if (focus) module.plan.canvas.focus({ preventScroll: true });
 }
 
@@ -242,7 +241,7 @@ const preview = params.get('apercu') === '1';
 const step = params.get('etape');
 const linkedSeat = Boolean(state.seatId) && (!step || step === 'place');
 if (step === 'place' || linkedSeat || preview || guided) {
-  openSeatModule({ push: false, focus: false, preview, guided, linkedSeat });
+  openSeatModule({ push: false, focus: false, preview, guided });
 } else {
   navigate(step === 'date' ? 'stepDate' : 'stepShow', { push: false, focus: false });
 }

@@ -6,7 +6,7 @@
 //     categoryOf, categories,        // catégories et tarifs (ici simulés)
 //     context: { title, subtitle },
 //     initialSeatId,                 // facultatif
-//     initialMode: 'concert',        // facultatif, salle vide par défaut
+//     initialMode: 'empty',          // facultatif, ambiance concert par défaut
 //     onSelect(seatId),              // renvoie l'identifiant du siège choisi
 //     onCancel(),
 //   });
@@ -59,9 +59,10 @@ export function mountSeatPreview(root, opts) {
   let taken = new Set(opts.availability?.takenSeatIds || []);
   const params = new URLSearchParams(location.search);
   const forceFixed = params.get('vue') === 'fixe';
+  const initialMode = opts.initialMode === 'empty' ? 'empty' : 'concert';
   const state = {
     selected: null, compare: null, active: 'A', zone: null, category: null,
-    tourGear: true, mode: opts.initialMode === 'concert' ? 'concert' : 'empty',
+    tourGear: true, mode: initialMode,
     noMotion: matchMedia('(prefers-reduced-motion: reduce)').matches || localStorageGet('noMotion') === '1',
   };
   document.documentElement.classList.toggle('no-motion', state.noMotion);
@@ -443,7 +444,7 @@ export function mountSeatPreview(root, opts) {
     const abB = h('button', { type: 'button', class: 'ab', 'data-ab': 'B', 'aria-pressed': 'false', onclick: () => showSide('B') });
     const abBox = h('div', { class: 'v3-ab', role: 'group', 'aria-label': 'Comparer deux places' }, abA, abB);
     const modes = h('div', { class: 'v3-modes', id: 'v3Mode', role: 'group', 'aria-label': 'Ambiance de la vue' },
-      ...[['empty', 'Salle vide'], ['concert', 'Ambiance concert']].map(([mode, text]) => h('button', {
+      ...[['concert', 'Ambiance concert'], ['empty', 'Salle vide']].map(([mode, text]) => h('button', {
         type: 'button', 'data-mode': mode, 'aria-pressed': String(state.mode === mode),
         onclick: () => {
           if (state.mode === mode) return;
@@ -544,7 +545,7 @@ export function mountSeatPreview(root, opts) {
     return { x0: topLeft.x, z0: topLeft.z, x1: bottomRight.x, z1: bottomRight.z };
   }
 
-  async function openPreview(seat, side = 'A', { mode } = {}) {
+  async function openPreview(seat, side = 'A', { mode = side === 'B' ? state.mode : initialMode } = {}) {
     if (!seat || !v3.el.hidden || (side === 'B' && !state.compare)) return;
     if (side === 'A' && state.selected !== seat.id) select(seat, { silent: true });
     const ticket = ++viewTicket;
