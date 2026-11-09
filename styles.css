@@ -146,7 +146,6 @@ h1, h2, h3, p { margin: 0; }
 #hallDetails .src { margin-left: 9px; }
 .chip, .time { min-height: 40px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-up); font-weight: 640; font-size: 13px; }
 .chip { display: grid; align-content: center; line-height: 1.2; }
-.chip small { font-size: 9px; color: var(--muted); font-weight: 550; }
 .chip.soon { border-style: dashed; }
 .chip[aria-pressed="true"], .time[aria-pressed="true"] { color: var(--accent); background: #243c35; border-color: #70b79b; }
 .time { flex: 1; font-variant-numeric: tabular-nums; }

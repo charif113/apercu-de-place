@@ -141,7 +141,7 @@ export const CINEMAS = [
         id: 'demo-classique', label: 'Classique démo', fullName: 'Classique démo',
         verified: { name: false, layout: false },
         facts: ['Écran plat d’environ 12 m de diagonale', 'Fauteuils rembourrés'],
-        demoLabel: true, representative: true, capacity: null, model: classicModel,
+        representative: true, capacity: null, model: classicModel,
       },
     ],
   },

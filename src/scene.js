@@ -285,7 +285,7 @@ export class CinemaScene {
     this.tween = null;
     this._clock = performance.now();
     this._bindLook();
-    new ResizeObserver(() => this.resize()).observe(canvas);
+    this.resizeObserver = new ResizeObserver(() => this.resize());
   }
 
   // ---------- construction d'une salle ----------------------------------------
@@ -796,6 +796,7 @@ export class CinemaScene {
     if (this.running) return;
     this.running = true;
     this.resize();
+    this.resizeObserver.observe(this.canvas);
     const loop = (now) => {
       if (!this.running) return;
       requestAnimationFrame(loop);
@@ -806,6 +807,7 @@ export class CinemaScene {
 
   stop() {
     this.running = false;
+    this.resizeObserver.disconnect();
   }
 
   frame(now) {

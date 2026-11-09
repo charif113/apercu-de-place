@@ -23,21 +23,18 @@
     </nav>
     <section class="card film-card" id="film" aria-labelledby="filmTitle">
       <div class="film-copy">
-        <p class="kicker">FILM DE L’EXEMPLE</p>
-        <h1 id="filmTitle" tabindex="-1">Dune<br><span>Troisième partie</span></h1>
+        <p class="kicker">FILM FICTIF</p>
+        <h1 id="filmTitle" tabindex="-1">La passe des glaces</h1>
         <p>Choisissez une séance de démonstration, puis prévisualisez la salle depuis la place qui vous intéresse.</p>
         <div class="actions">
           <button class="primary" id="chooseScreening">Choisir une séance</button>
-          <button id="showTrailer" aria-expanded="false" aria-controls="trailer">Bande-annonce officielle</button>
         </div>
       </div>
-      <div id="trailer" class="trailer" hidden>
-        <div id="trailerPlayer"></div>
-        <a href="https://www.youtube.com/watch?v=9JEN4lN1wH8" target="_blank" rel="noopener noreferrer">Voir sur la chaîne Warner Bros. France</a>
-      </div>
+      <img class="film-image" src="assets/passe-des-glaces.webp" width="2172" height="724"
+        alt="Un fjord bordé de montagnes enneigées au coucher du soleil">
     </section>
     <section class="card" id="screenings" aria-labelledby="screeningsTitle" hidden>
-      <p class="kicker">DUNE · TROISIÈME PARTIE</p>
+      <p class="kicker">LA PASSE DES GLACES</p>
       <h1 id="screeningsTitle" tabindex="-1">Choisir une séance</h1>
       <p class="note">Horaires, tarifs et disponibilités de démonstration.</p>
       <div id="screeningOptions" class="screening-options"></div>
@@ -52,7 +49,7 @@
       <div class="seat-frame" id="seatFrame"></div>
     </section>
     <section class="card" id="recap" aria-labelledby="recapTitle" hidden>
-      <p class="kicker">DUNE · TROISIÈME PARTIE</p>
+      <p class="kicker">LA PASSE DES GLACES</p>
       <h1 id="recapTitle" tabindex="-1">Récapitulatif</h1>
       <dl id="recapDetails"></dl>
       <p class="note">Séance, place et tarif de démonstration. La simulation n’effectue aucun paiement.</p>

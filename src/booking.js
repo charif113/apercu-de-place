@@ -3,8 +3,7 @@ import { computeLayout, demoTaken } from './layout.js';
 import { SEAT_PROTOCOL, seatMessage, matchesSeatEvent } from './bridge.js';
 
 const $ = (selector) => document.querySelector(selector);
-const filmId = 'dune-troisieme-partie';
-const trailerUrl = 'https://www.youtube-nocookie.com/embed/9JEN4lN1wH8';
+const filmId = 'passe-des-glaces';
 const sections = ['film', 'screenings', 'seats', 'recap'];
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 let iframe, session, screening, selection, completed, readyTimer;
@@ -151,30 +150,7 @@ for (const hallId of ['demo-grand-ecran', 'demo-panoramique']) {
   $('#screeningOptions').appendChild(block);
 }
 
-$('#showTrailer').onclick = () => {
-  const panel = $('#trailer');
-  panel.hidden = !panel.hidden;
-  $('#showTrailer').setAttribute('aria-expanded', String(!panel.hidden));
-  if (!panel.hidden) {
-    const player = document.createElement('iframe');
-    player.src = trailerUrl;
-    player.title = 'Bande-annonce officielle Warner Bros. France';
-    player.allow = 'encrypted-media; picture-in-picture; fullscreen';
-    player.allowFullscreen = true;
-    player.referrerPolicy = 'strict-origin-when-cross-origin';
-    $('#trailerPlayer').appendChild(player);
-    panel.scrollIntoView({ block: 'nearest' });
-  } else {
-    $('#trailerPlayer').replaceChildren();
-  }
-};
-
-$('#chooseScreening').onclick = () => {
-  $('#trailerPlayer').replaceChildren();
-  $('#trailer').hidden = true;
-  $('#showTrailer').setAttribute('aria-expanded', 'false');
-  show('screenings');
-};
+$('#chooseScreening').onclick = () => show('screenings');
 $('#backFilm').onclick = () => show('film');
 $('#backScreenings').onclick = () => {
   closeSeatModule();

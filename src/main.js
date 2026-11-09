@@ -100,7 +100,7 @@ function renderHalls(cinema) {
     b.className = 'chip' + (h.model ? '' : ' soon');
     b.dataset.hall = h.id;
     b.setAttribute('aria-pressed', selected);
-    b.innerHTML = `<span>${h.label}</span>${h.demoLabel ? '<small aria-hidden="true">Libellé démo</small>' : ''}`;
+    b.textContent = h.label;
     b.onclick = () => {
       selectHall(h.id);
       const mobile = matchMedia('(max-width: 760px)').matches;
@@ -469,34 +469,48 @@ function comparableHalls() {
 }
 
 async function compareHall(hallId) {
-  if (state.busy || !state.in3d || hallId === state.hallId) return;
-  const { hall } = findHall(hallId);
+  if (state.busy || !state.in3d) return;
+  if (hallId === state.hallId) {
+    state.compact = true;
+    renderSheet(previewedSeat);
+    $('#roomComparison summary')?.focus({ preventScroll: true });
+    return;
+  }
   const origin = roomComparison?.origin || {
     seat: previewedSeat,
     layout,
     active: state.active,
     screenXTrial: state.screenXTrial,
   };
-  const result = findComparableSeat(origin.seat, origin.layout, computeLayout(hall));
+  const returning = hallId === origin.layout.hall.id;
+  const result = returning
+    ? { seat: origin.seat, exact: true }
+    : findComparableSeat(origin.seat, origin.layout, computeLayout(findHall(hallId).hall));
   if (!result) return;
 
   state.busy = true;
   selectHall(hallId, { fromPreview: true });
-  roomComparison = { origin, exact: result.exact };
+  state.compact = true;
+  roomComparison = returning ? null : { origin, exact: result.exact };
+  if (returning) {
+    state.active = origin.active;
+    state.screenXTrial = origin.screenXTrial;
+  }
   previewedSeat = result.seat;
   await preparePreviewHall();
   renderSheet(previewedSeat);
   if (still) {
     showStill(previewedSeat);
   } else {
-    scene.markSeats(null, null);
+    const hs = hallState();
+    scene.markSeats(returning ? hs.selected : null, returning ? hs.compare : null);
     scene.setSpectators(taken, state.showSpectators);
     scene.setExtended(state.extended !== false);
     scene.start();
     scene.snapToSeat(previewedSeat);
   }
   state.busy = false;
-  $('[data-compare-hall][aria-pressed="true"]')?.focus({ preventScroll: true });
+  $('#roomComparison summary')?.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------- fiche 3D
@@ -520,6 +534,11 @@ function renderSheet(seat) {
   const sel = roomComparison ? null : seatById(hs.selected);
   $('#ctxCinema').textContent = `${cinema.name} · ${hall.label}`;
   $('#ctxSeat').textContent = `Rang ${seat.row} · Place ${seat.num}`;
+  const comparable = $('#ctxComparable');
+  comparable.textContent = roomComparison && !roomComparison.exact
+    ? `Place comparable à ${roomComparison.origin.seat.id}`
+    : '';
+  comparable.hidden = !comparable.textContent;
 
   const sx = $('#sxToggle');
   sx.hidden = still || !hall.model.sides;
@@ -530,7 +549,7 @@ function renderSheet(seat) {
     ? seatById(SCREENX_TRIAL.second) : null;
   const compareTrial = trialSeat && !taken.has(trialSeat.id);
   const halls = comparableHalls();
-  const roomOptions = halls.length ? `<details id="roomComparison" class="room-comparison"${roomComparison ? ' open' : ''}>
+  const roomOptions = halls.length ? `<details id="roomComparison" class="room-comparison">
     <summary>Même place, autre salle</summary>
     <div class="seg" role="group" aria-label="Comparer les salles">
       ${halls.map(({ id, label }) => `<button type="button" data-compare-hall="${id}" aria-pressed="${id === state.hallId}">${label}</button>`).join('')}
