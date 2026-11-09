@@ -93,10 +93,12 @@
           <div class="times" id="showtimes" aria-label="Séances de démonstration"></div>
         </section>
         <section class="option access-options">
-          <h2>Choisir par rang et numéro</h2>
-          <div class="seat-fields">
-            <label>Rang <select id="rowPicker"></select></label>
-            <label>Place <select id="seatPicker"></select></label>
+          <div id="seatPickerInline" class="seat-picker-inline">
+            <h2>Choisir par rang et numéro</h2>
+            <div class="seat-fields">
+              <div class="seat-field"><label for="rowPicker">Rang</label><select id="rowPicker"></select></div>
+              <div class="seat-field"><label for="seatPicker">Place</label><select id="seatPicker"></select></div>
+            </div>
           </div>
           <label class="access-toggle"><input type="checkbox" id="pmrOnly"> Afficher les emplacements PMR</label>
           <label class="access-toggle"><input type="checkbox" id="noMotion"> Sans animation</label>
@@ -107,11 +109,18 @@
           <a id="otherCinema" href="?cinema=autre">Explorer un autre cinéma</a>
         </nav>
       </div>
+      <button type="button" id="openSeatPicker" class="seat-picker-trigger" aria-haspopup="dialog" aria-controls="seatPickerDialog" hidden>Choisir par rang et numéro</button>
       <section class="plan-selection">
         <h2><span>03</span>Place</h2>
         <div class="bar" id="bar" aria-live="polite"></div>
       </section>
     </aside>
+    <dialog id="seatPickerDialog" class="seat-picker-dialog" aria-labelledby="seatPickerTitle">
+      <div class="seat-picker-head">
+        <h2 id="seatPickerTitle">Choisir par rang et numéro</h2>
+        <button type="button" id="closeSeatPicker" class="btn ghost">Fermer</button>
+      </div>
+    </dialog>
   </div>
 
   <div id="view3d" class="view3d" hidden>
@@ -126,9 +135,15 @@
         <b id="ctxSeat"></b>
         <span id="ctxComparable" hidden></span>
       </div>
-      <button type="button" class="round" id="recenter" aria-label="Recentrer le regard">
-        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5"/><path d="M10 2v4m0 8v4M2 10h4m8 0h4"/></svg>
-      </button>
+      <div class="hud-actions">
+        <button type="button" class="round" id="recenter" aria-label="Recentrer le regard">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5"/><path d="M10 2v4m0 8v4M2 10h4m8 0h4"/></svg>
+        </button>
+        <button type="button" class="round" id="immersiveToggle" aria-label="Masquer les commandes" title="Masquer les commandes" aria-expanded="true" aria-controls="sheet">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3H3v5m9-5h5v5m0 4v5h-5m-4 0H3v-5"/></svg>
+          <span class="immersive-label">Masquer les commandes</span>
+        </button>
+      </div>
       <div class="view-controls">
         <div class="seg sx" id="sxToggle" role="group" aria-label="Mode de projection ScreenX" hidden>
           <button type="button" data-sx="0">Frontal seul</button>

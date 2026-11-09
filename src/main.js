@@ -232,6 +232,7 @@ function updateBar() {
   const hs = layout ? hallState() : {};
   const s = seatById(hs.selected);
   const bar = $('#bar');
+  $('#openSeatPicker').hidden = !layout;
   $('#tryScreenX').hidden = bridge.embedded || !layout || state.pickingB || findHall(state.hallId).cinema.id !== 'demo';
   if (!layout) {
     bar.innerHTML = '<p class="hint">Cette salle n’a pas encore de modèle 3D.</p>';
@@ -361,6 +362,7 @@ async function openPreview(seat) {
   state.compact = true;
   const hs = hallState();
   const v = $('#view3d');
+  setImmersive(false);
   v.hidden = false;
   v.classList.remove('shown');
   $('#app').inert = true;
@@ -627,7 +629,7 @@ function renderSheet(seat) {
     $('#tryScreenXCompare').onclick = async () => {
       if (state.busy) return;
       await setCompare(trialSeat, true);
-      $('[data-ab="B"]')?.focus({ preventScroll: true });
+      ($('.view3d.immersive') ? $('#immersiveToggle') : $('[data-ab="B"]'))?.focus({ preventScroll: true });
     };
     return;
   }
@@ -651,8 +653,22 @@ function renderSheet(seat) {
   };
 }
 
+function setImmersive(enabled) {
+  $('#view3d').classList.toggle('immersive', enabled);
+  const toggle = $('#immersiveToggle');
+  const label = enabled ? 'Afficher les commandes' : 'Masquer les commandes';
+  toggle.setAttribute('aria-expanded', String(!enabled));
+  toggle.setAttribute('aria-label', label);
+  toggle.title = label;
+  toggle.querySelector('.immersive-label').textContent = enabled ? 'Commandes' : label;
+}
+
 function updateInsets() {
   if (!scene || still) return;
+  if ($('.view3d.immersive')) {
+    scene.setInsets(0, 0);
+    return;
+  }
   const hud = $('.hud').getBoundingClientRect();
   const toggle = $('#sxToggle');
   const mobile = matchMedia('(max-width: 760px)').matches;
@@ -672,6 +688,11 @@ window.addEventListener('resize', () => {
 
 // ---------------------------------------------------------------- liaisons
 $('#back').onclick = () => backToPlan();
+$('#immersiveToggle').onclick = () => {
+  if (!state.in3d || state.busy) return;
+  setImmersive(!$('.view3d.immersive'));
+  updateInsets();
+};
 $('#recenter').onclick = () => scene && scene.recenter();
 $('#zoomIn').onclick = () => plan.zoomBy(1.6);
 $('#zoomOut').onclick = () => plan.zoomBy(1 / 1.6);
@@ -700,10 +721,36 @@ sheetToggle.onpointercancel = () => { sheetDrag = null; };
 sheetToggle.onclick = () => {
   if (performance.now() - lastSheetSwipe > 350) setPlanSheet(sheetToggle.getAttribute('aria-expanded') !== 'true');
 };
+const seatPickerDialog = $('#seatPickerDialog');
+const seatFields = $('.seat-fields');
+const seatPickerTrigger = $('#openSeatPicker');
+const seatPickerMobile = matchMedia('(max-width: 760px)');
+function closeSeatPicker() {
+  if (!seatPickerDialog.open) return;
+  seatPickerDialog.close();
+  $('#seatPickerInline').append(seatFields);
+  (seatPickerMobile.matches ? seatPickerTrigger : $('#rowPicker')).focus({ preventScroll: true });
+}
+seatPickerTrigger.onclick = () => {
+  if (!layout || !seatPickerMobile.matches || seatPickerDialog.open) return;
+  setPlanSheet(false);
+  seatPickerDialog.append(seatFields);
+  seatPickerDialog.showModal();
+  $('#rowPicker').focus({ preventScroll: true });
+};
+$('#closeSeatPicker').onclick = closeSeatPicker;
+seatPickerDialog.oncancel = (event) => {
+  event.preventDefault();
+  closeSeatPicker();
+};
+seatPickerMobile.addEventListener('change', (event) => {
+  if (!event.matches) closeSeatPicker();
+});
 $('#rowPicker').onchange = (event) => renderSeatPicker(event.target.value);
 $('#seatPicker').onchange = (event) => {
   const seat = seatById(event.target.value);
   if (!seat) return;
+  closeSeatPicker();
   plan.centerOn(seat);
   onSeatTap(seat);
   if (!state.in3d) $('#reopen')?.focus({ preventScroll: true });
@@ -714,7 +761,7 @@ $('#pmrOnly').onchange = (event) => {
 };
 $('#noMotion').onchange = (event) => document.body.classList.toggle('no-motion', event.target.checked);
 window.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape') return;
+  if (event.key !== 'Escape' || seatPickerDialog.open) return;
   if (state.in3d) backToPlan();
   else setPlanSheet(false);
 });
