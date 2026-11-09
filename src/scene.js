@@ -144,8 +144,8 @@ function spectatorMesh(capacity) {
   const shoulders = [[0, 0], [0.12, 0], [0.17, 0.22], [0.225, 0.48], [0.195, 0.57], [0.06, 0.63], [0, 0.63]];
   const parts = [
     [new THREE.LatheGeometry(shoulders.map(([x, y]) => new THREE.Vector2(x, y)), 12).scale(1, 1, 0.60), 0x464b53],
-    [new THREE.CylinderGeometry(0.044, 0.052, 0.12, 8).translate(0, 0.65, -0.025), 0x554e4c],
-    [new THREE.SphereGeometry(1, 12, 8).scale(0.092, 0.116, 0.105).translate(0, 0.78, -0.036), 0x514b49],
+    [new THREE.CylinderGeometry(0.039, 0.047, 0.11, 8).translate(0, 0.643, -0.025), 0x554e4c],
+    [new THREE.SphereGeometry(1, 12, 8).scale(0.077, 0.102, 0.095).translate(0, 0.762, -0.036), 0x514b49],
   ];
   const geometry = mergeGeometries(parts.map(([part, tint]) => {
     const flat = part.toNonIndexed();
