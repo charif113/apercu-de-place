@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10111c">
+  <meta name="theme-color" content="#0c0e19">
   <title>Nova Ligne · Palais Nikaïa — billetterie de démonstration</title>
   <meta name="description" content="Démonstration : choisissez votre place pour un concert fictif au Palais Nikaïa et voyez la scène depuis votre fauteuil avant d’acheter.">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles-preview.css">
   <script type="importmap">
     { "imports": {
         "three": "./vendor/three/build/three.module.js",
@@ -39,15 +40,33 @@
           <p class="kicker">NOVA LIGNE / TOURNÉE HORIZON</p>
           <h1 id="showTitle" tabindex="-1">Voir la scène<br>depuis votre place</h1>
           <p class="venue">Palais Nikaïa · Nice</p>
-          <p class="hero-description">Du premier rang au haut des gradins, comparez deux fauteuils avant de choisir votre billet.</p>
+          <p class="hero-description">Du parterre au haut des gradins, comparez la vue avant de choisir votre billet.</p>
           <p class="small muted">Concert fictif · Tarifs et disponibilités simulés</p>
           <div class="cta-bar step-actions">
             <button type="button" id="chooseDate" class="btn primary big">Choisir ma place</button>
+            <a id="guidedComparison" class="btn comparison-cta" href="?etape=place&amp;comparer=1">Comparer deux places</a>
             <a id="directPlan" class="text-action" href="?etape=place">Accéder directement au plan</a>
           </div>
         </div>
-        <img class="concert-poster" src="assets/nova-ligne-horizon.webp" width="1024" height="1536" alt="Affiche Nova Ligne, Tournée Horizon. Un rayon corail fend une brume bleue derrière un musicien.">
+        <img class="concert-poster" data-src="assets/nova-ligne-horizon.webp" width="1024" height="1536" decoding="async" fetchpriority="high" alt="Affiche Nova Ligne, Tournée Horizon. Un rayon corail fend une brume bleue derrière un musicien.">
       </div>
+      <section class="home-views" aria-labelledby="viewsTitle">
+        <div class="home-views-head"><div><p class="kicker">Depuis les fauteuils</p><h2 id="viewsTitle">Trois places, trois perspectives</h2></div><span>Vues simulées · Ambiance concert</span></div>
+        <div class="home-preview-list">
+          <button type="button" class="home-preview" data-home-preset="proche">
+            <img data-src="assets/previews/proche.webp" width="480" height="270" alt="" loading="lazy" decoding="async">
+            <span><strong>Proche</strong><small>Parterre · près de la scène</small></span>
+          </button>
+          <button type="button" class="home-preview" data-home-preset="lateral">
+            <img data-src="assets/previews/lateral.webp" width="480" height="270" alt="" loading="lazy" decoding="async">
+            <span><strong>Latéral</strong><small>Gradin 1 · vue de biais</small></span>
+          </button>
+          <button type="button" class="home-preview" data-home-preset="haut">
+            <img data-src="assets/previews/haut.webp" width="480" height="270" alt="" loading="lazy" decoding="async">
+            <span><strong>En hauteur</strong><small>Gradin 3 · vue d’ensemble</small></span>
+          </button>
+        </div>
+      </section>
     </section>
 
     <!-- 2. Date -->
@@ -66,6 +85,10 @@
 
     <!-- 3. Module de choix de place -->
     <section id="stepSeat" class="step" hidden aria-label="Choix de la place">
+      <div id="planStatus" class="plan-status" hidden>
+        <p id="planStatusText" role="status">Chargement du plan…</p>
+        <button type="button" id="retryPlan" class="btn" hidden>Réessayer</button>
+      </div>
       <div id="seatModule" class="seat-module"></div>
     </section>
 

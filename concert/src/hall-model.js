@@ -41,7 +41,7 @@ function addRoof(parent, mat) {
     const y = arch(x) - 1.35;
     ribs.push(tube(new THREE.Vector3(x, y, -16), new THREE.Vector3(x, y, 58), 0.095));
   }
-  const steel = mat(0x456a9b, { roughness: 0.49, metalness: 0.22, emissive: 0x101b2c, emissiveIntensity: 0.38 });
+  const steel = mat(0x38444e, { roughness: 0.63, metalness: 0.22, emissive: 0x101b2c, emissiveIntensity: 0.11 });
   meshGroup(overhead, ribs, steel, 'arcs triangulés');
   const roof = new THREE.Mesh(new THREE.PlaneGeometry(120, 110), mat(0x11151b, { side: THREE.DoubleSide }));
   roof.rotation.x = Math.PI / 2;
@@ -51,8 +51,8 @@ function addRoof(parent, mat) {
     overhead,
     setConcertLighting(on) {
       // Un bleu ardoise discret laisse les faisceaux de scène au premier plan.
-      steel.color.setHex(on ? 0x3d5269 : 0x456a9b);
-      steel.emissiveIntensity = on ? 0.14 : 0.38;
+      steel.color.setHex(on ? 0x26323f : 0x38444e);
+      steel.emissiveIntensity = on ? 0.065 : 0.11;
     },
   };
 }
@@ -178,17 +178,20 @@ const FIXED_BACK = [
   [0.231, 0.779, 0.179, 0, -0.027], [0.243, 0.845, 0.146, 0, -0.022],
 ];
 
-function chairShell(profile) {
-  const columns = [-1, 0, 1];
+function chairShell(profile, columns = [-1, 0, 1]) {
   const width = columns.length;
   const surfaceSize = profile.length * width;
-  const positions = [], faces = [];
+  const positions = [], tones = [], faces = [];
   for (const underside of [false, true]) {
     profile.forEach(([z, y, half, rise, curve], i) => {
       const before = profile[Math.max(0, i - 1)], after = profile[Math.min(profile.length - 1, i + 1)];
       const dz = after[0] - before[0], dy = after[1] - before[1], length = Math.hypot(dz, dy);
       const offset = underside ? 0.017 / length : 0;
-      for (const edge of columns) positions.push(edge * half, y + rise * edge ** 2 - dz * offset, z + curve * edge ** 2 + dy * offset);
+      for (const edge of columns) {
+        positions.push(edge * half, y + rise * edge ** 2 - dz * offset, z + curve * edge ** 2 + dy * offset);
+        const shade = (underside ? 0.78 : 0.96) + Math.abs(edge) * 0.10 - 0.06 * Math.cos(i * 0.7);
+        tones.push(shade, shade, shade);
+      }
     });
   }
   for (let i = 0; i < surfaceSize - width; i += width) {
@@ -197,9 +200,9 @@ function chairShell(profile) {
       faces.push(a, c, b, b, c, d, a + surfaceSize, b + surfaceSize, c + surfaceSize, b + surfaceSize, d + surfaceSize, c + surfaceSize);
     }
   }
-  const rim = [0, 1, 2];
+  const rim = columns.map((_, i) => i);
   for (let i = width * 2 - 1; i < surfaceSize; i += width) rim.push(i);
-  rim.push(surfaceSize - 2, surfaceSize - 3);
+  for (let i = surfaceSize - 2; i >= surfaceSize - width; i--) rim.push(i);
   for (let i = surfaceSize - width * 2; i > 0; i -= width) rim.push(i);
   for (let i = 0; i < rim.length; i++) {
     const a = rim[i], b = rim[(i + 1) % rim.length];
@@ -207,9 +210,20 @@ function chairShell(profile) {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(tones, 3));
   geometry.setIndex(faces);
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function chairBackRidge(profile) {
+  const points = [];
+  for (const side of [-1, 1]) {
+    for (const [z, y, half, , curve] of side < 0 ? profile : [...profile].reverse()) {
+      points.push(new THREE.Vector3(side * 0.85 * half, y - 0.009, z + curve * 0.85 + 0.017));
+    }
+  }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, false, 'centripetal'), 12, 0.006, 5, false);
 }
 
 function chairFrame(mobile) {
@@ -236,13 +250,19 @@ export function addVenueChairs(parent, seats, mat) {
     fixed: mergeGeometries([chairShell(FIXED_SEAT), chairShell(FIXED_BACK)]),
   };
   const frames = { mobile: chairFrame(true), fixed: chairFrame(false) };
-  const seatMaterial = mat(0xffffff, { roughness: 0.39, metalness: 0.055 });
+  const overviewShells = {
+    mobile: chairShell([MOBILE_CHAIR[0], MOBILE_CHAIR[2], MOBILE_CHAIR[4], MOBILE_CHAIR.at(-1)], [-1, 1]),
+    fixed: chairShell([FIXED_SEAT[0], FIXED_SEAT.at(-1), FIXED_BACK[1], FIXED_BACK.at(-1)], [-1, 1]),
+  };
+  const seatMaterial = mat(0xffffff, { vertexColors: true, roughness: 0.53, metalness: 0.02 });
   const frameMaterial = mat(0x24262b, { roughness: 0.56, metalness: 0.29 });
   const colors = [0x2b6eaa, 0x80a0b9, 0x8dafc9, 0x284cae, 0x343a45].map((c) => new THREE.Color(c));
   const origin = new THREE.Vector3(), yAxis = new THREE.Vector3(0, 1, 0), rotation = new THREE.Quaternion();
   const scale = new THREE.Vector3(1, 1, 1), matrix = new THREE.Matrix4(), color = new THREE.Color();
   // Regrouper par bloc permet au moteur d'omettre les rangées hors du champ.
   const batches = new Map();
+  const nearby = [];
+  const levels = [];
   for (const seat of seats) {
     if (seat.pmr) continue;
     const key = `${seat.tier}-${seat.block}`;
@@ -266,7 +286,50 @@ export function addVenueChairs(parent, seats, mat) {
       shell.setMatrixAt(i, matrix);
       shell.setColorAt(i, color);
       support.setMatrixAt(i, matrix);
+      nearby.push({ seat: s, type, color: color.clone().multiplyScalar(0.66) });
     });
     parent.add(shell, support);
+    shell.computeBoundingSphere();
+    levels.push({ type, shell, support, simplified: false });
   }
+  const ridgeMaterial = mat(0xffffff, { roughness: 0.48, metalness: 0.025 });
+  const ridges = {
+    mobile: new THREE.InstancedMesh(chairBackRidge(MOBILE_CHAIR.slice(-4)), ridgeMaterial, 48),
+    fixed: new THREE.InstancedMesh(chairBackRidge(FIXED_BACK), ridgeMaterial, 48),
+  };
+  for (const ridge of Object.values(ridges)) {
+    ridge.count = 0;
+    ridge.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    ridge.name = 'nervures moulées à proximité';
+    parent.add(ridge);
+  }
+  const updateLevels = (overview) => {
+    for (const { type, shell, support, simplified } of levels) {
+      shell.geometry = overview || simplified ? overviewShells[type] : shells[type];
+      support.visible = !overview;
+    }
+    for (const ridge of Object.values(ridges)) ridge.visible = !overview;
+  };
+  const focus = (observer) => {
+    for (const level of levels) {
+      const { center, radius } = level.shell.boundingSphere;
+      level.simplified = Math.hypot(center.x - observer.x, center.z - observer.z) - radius > 24;
+    }
+    updateLevels(false);
+    ridges.mobile.count = ridges.fixed.count = 0;
+    for (const { seat, type, color } of nearby) {
+      const ridge = ridges[type];
+      if (ridge.count >= 48 || Math.abs(seat.y - observer.y) > 1.1 || Math.hypot(seat.x - observer.x, seat.z - observer.z) > 2.9) continue;
+      origin.set(seat.x, seat.y, seat.z);
+      rotation.setFromAxisAngle(yAxis, seat.yaw);
+      ridge.setMatrixAt(ridge.count, matrix.compose(origin, rotation, scale));
+      ridge.setColorAt(ridge.count++, color);
+    }
+    for (const ridge of Object.values(ridges)) {
+      ridge.instanceMatrix.needsUpdate = true;
+      if (ridge.instanceColor) ridge.instanceColor.needsUpdate = true;
+      if (ridge.count) ridge.computeBoundingSphere();
+    }
+  };
+  return { focus, updateLevels };
 }

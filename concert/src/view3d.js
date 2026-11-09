@@ -11,18 +11,19 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { eyeOf, ARTIST, obstructions, ARC_CENTER } from './venue.js';
 import { addVenueChairs, buildHall } from './hall-model.js';
 import { AudienceModel } from './audience.js';
-import { ConcertShow } from './show.js';
+import { ConcertShow, stageDeckTexture, stageSkirtTexture } from './show.js';
 import { aimAt, createPlunge, PLUNGE_DURATION, CUTAWAY_HEIGHT } from './camera-flight.js';
 
 export const HFOV = 70; // degrés, identique pour toutes les places et tous les écrans
 
 
 export class SeatView3D {
-  constructor(canvas, venue, { taken = new Set(), audience = true, tourGear = true } = {}) {
+  constructor(canvas, venue, { taken = new Set(), audience = true, tourGear = true, mode = 'empty' } = {}) {
     this.canvas = canvas;
     this.venue = venue;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.pixelRatio = Math.min(2, window.devicePixelRatio || 1);
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -43,8 +44,9 @@ export class SeatView3D {
     this._buildRails();
     this._buildRegie();
     this.show = new ConcertShow(venue, this.scene, this.tour);
-    this.audienceModel = new AudienceModel(venue, this.scene);
-    this.setAudience(taken, audience);
+    this.taken = taken;
+    this.audienceEnabled = audience;
+    this.setPreviewMode(mode);
     this.setTourGear(tourGear);
     this._bindLook();
     this.marker = new THREE.Mesh(new THREE.RingGeometry(0.37, 0.49, 32), new THREE.MeshBasicMaterial({
@@ -71,8 +73,9 @@ export class SeatView3D {
 
   _buildStage() {
     const st = this.venue.stage;
+    const skirt = this._mat(0xffffff, { map: stageSkirtTexture() });
     const deck = new THREE.Mesh(new THREE.BoxGeometry(st.width, st.height, st.depth), [
-      this._mat(0x0d0d10), this._mat(0x0d0d10), this._mat(0x151518, { roughness: 0.55 }), this._mat(0x0d0d10), this._mat(0x060607, { roughness: 1 }), this._mat(0x0d0d10),
+      skirt, skirt, this._mat(0xffffff, { map: stageDeckTexture(), roughness: 0.68 }), this._mat(0x0d0d10), skirt, skirt,
     ]);
     deck.position.set(0, st.height / 2, -st.depth / 2);
     this.fixed.add(deck);
@@ -147,7 +150,7 @@ export class SeatView3D {
     });
     this.fixed.add(tread, riser);
 
-    addVenueChairs(this.fixed, venue.seats, this._mat);
+    this.chairDetail = addVenueChairs(this.fixed, venue.seats, this._mat);
   }
 
   _buildRails() {
@@ -189,7 +192,9 @@ export class SeatView3D {
     const drape = new THREE.Mesh(new THREE.BoxGeometry(d.x1 - d.x0 + 0.8, 1.1, 0.04), this._mat(0x0b0b0d));
     drape.position.set(0, d.y + 0.55, d.z0 - 0.45);
     desk.add(body, screens, drape);
-    for (const x of [-2, 0, 2]) desk.add(this._person(x, d.y, d.z1 + 0.55, Math.PI, 0x1b1c20, true));
+    this.crew = new THREE.Group();
+    for (const x of [-2, 0, 2]) this.crew.add(this._person(x, d.y, d.z1 + 0.55, Math.PI, 0x1b1c20, true));
+    desk.add(this.crew);
     desk.name = 'regie-tournee';
     this.tour.add(desk);
   }
@@ -213,8 +218,28 @@ export class SeatView3D {
     return g;
   }
 
-  setAudience(taken, on) {
-    this.audienceModel.setAudience(taken, on);
+  setPreviewMode(mode) {
+    this.previewMode = mode === 'concert' ? 'concert' : 'empty';
+    const concert = this.previewMode === 'concert';
+    this.setWorkLights(!concert);
+    this.show.setPerformersVisible(concert);
+    this.crew.visible = concert;
+    this._syncAudience();
+  }
+
+  setAudience(taken, on = this.audienceEnabled) {
+    this.taken = taken;
+    this.audienceEnabled = on;
+    this._syncAudience();
+  }
+
+  _syncAudience() {
+    const visible = this.audienceEnabled && this.previewMode === 'concert';
+    if (visible && !this.audienceModel) {
+      this.audienceModel = new AudienceModel(this.venue, this.scene);
+      this.audienceModel.setObserver(this.seat);
+    }
+    this.audienceModel?.setAudience(this.taken, visible);
     this.requestRender();
   }
 
@@ -233,6 +258,7 @@ export class SeatView3D {
     this.seat = seat;
     const e = eyeOf(seat);
     this.audienceModel?.setObserver(seat);
+    this.chairDetail.focus(seat);
     this.target = { x: ARTIST.x, y: this.venue.stage.height + 1.3, z: ARTIST.z };
     this.base = aimAt(e, this.target);
     this.look = { yaw: 0, pitch: 0 };
@@ -247,6 +273,7 @@ export class SeatView3D {
     if (this.still || !this.eye || rect.z1 <= rect.z0) return;
     return new Promise((resolve) => {
       this.fly = { sample: createPlunge(rect, this.eye, this.target, this.camera.fov), resolve };
+      this.renderer.setPixelRatio(Math.min(0.85, this.pixelRatio));
       this.marker.position.set(this.seat.x, this.eye.y + 0.12, this.seat.z);
       this._applyCamera();
       this.requestRender();
@@ -258,9 +285,19 @@ export class SeatView3D {
     const { resolve } = this.fly;
     this.fly = null;
     if (this.overhead) this.overhead.visible = true;
+    this.chairDetail.updateLevels(false);
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.marker.visible = false;
     this._resize();
     resolve();
+  }
+
+  skipFlight() {
+    if (!this.fly) return false;
+    this._endFlight();
+    this._applyCamera();
+    this.requestRender();
+    return true;
   }
 
   setCameraRaw({ x, y, z, yaw, pitch, hfov }) {
@@ -310,7 +347,12 @@ export class SeatView3D {
         this.camera.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
         this.camera.fov = p.fov;
         this.camera.updateProjectionMatrix();
-        if (this.overhead) this.overhead.visible = p.y < CUTAWAY_HEIGHT;
+        const overview = p.y >= CUTAWAY_HEIGHT;
+        if (this.overhead) this.overhead.visible = !overview;
+        if (this.fly.overview !== overview) {
+          this.fly.overview = overview;
+          this.chairDetail.updateLevels(overview);
+        }
         this.marker.visible = k < 0.72;
         this.marker.material.opacity = Math.min(1, (0.72 - k) * 6);
         const span = 2 * Math.max(0, p.y - this.marker.position.y) * Math.tan(THREE.MathUtils.degToRad(p.fov) / 2);
@@ -339,15 +381,19 @@ export class SeatView3D {
   _bindLook() {
     const c = this.canvas;
     let drag = null;
-    c.addEventListener('pointerdown', (e) => { if (this.fly) return; drag = { x: e.clientX, y: e.clientY, look: { ...this.look } }; try { c.setPointerCapture(e.pointerId); } catch { /* */ } });
+    c.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || e.button !== 0 || this.skipFlight()) return;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, look: { ...this.look } };
+      try { c.setPointerCapture(e.pointerId); } catch { /* */ }
+    });
     c.addEventListener('pointermove', (e) => {
-      if (!drag) return;
+      if (drag?.id !== e.pointerId) return;
       const k = THREE.MathUtils.degToRad(HFOV) / c.clientWidth;
       this.look.yaw = THREE.MathUtils.clamp(drag.look.yaw + (e.clientX - drag.x) * k, -1.6, 1.6);
       this.look.pitch = THREE.MathUtils.clamp(drag.look.pitch + (e.clientY - drag.y) * k, -0.7, 0.8);
       this._applyCamera(); this.requestRender();
     });
-    const up = () => { drag = null; };
+    const up = (e) => { if (drag?.id === e.pointerId) drag = null; };
     c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
   }
 
@@ -360,7 +406,7 @@ export class SeatView3D {
 
   setStill(still) {
     this.still = still;
-    if (still && this.fly) { this._endFlight(); this._applyCamera(); }
+    if (still) this.skipFlight();
     this.requestRender();
   }
 
@@ -388,7 +434,7 @@ export class SeatView3D {
     if (!animating && !this.dirty && !this.fly) return;
     const t = this.still ? 2.0 : (now - this.t0) / 1000;
     const reveal = this.fly ? THREE.MathUtils.smoothstep((now - (this.fly.t0 ?? now)) / PLUNGE_DURATION, 0.56, 1) : 1;
-    if (this.tourOn && (animating || this.dirty)) this.show.update(t, reveal);
+    if (this.tourOn && !this.show.workLights && (animating || this.dirty)) this.show.update(t, reveal);
     if (this.eye) this._applyCamera(now);
     if (this.eye && !this.fly) this.show.renderScreens(this.renderer, now, animating);
     const density = this.scene.fog.density;

@@ -13,29 +13,76 @@ const state = {
   confirmed: null,
 };
 const steps = ['stepShow', 'stepDate', 'stepSeat', 'stepRecap'];
-const venuePromise = loadVenue();
+const wideHome = matchMedia('(min-width: 900px)');
+const inventory = new Map();
+let venuePromise;
 let module = null;
 let mountedShowtime = null;
 let loadedVenue = null;
+let seatRequest = 0;
+
+function getVenue() {
+  venuePromise ??= loadVenue().catch((error) => { venuePromise = null; throw error; });
+  return venuePromise;
+}
+
+function availabilityFor(venue, date) {
+  if (!inventory.has(date.id)) inventory.set(date.id, simulateAvailability(venue, date));
+  return inventory.get(date.id);
+}
+
+function loadHomeArt() {
+  const images = wideHome.matches ? '#stepShow img[data-src]' : '.concert-poster[data-src]';
+  for (const image of document.querySelectorAll(images)) {
+    image.src = image.dataset.src;
+    delete image.dataset.src;
+  }
+}
 
 function renderShowtimes() {
   const list = $('showtimeList');
   list.textContent = '';
   for (const s of CONCERT.showtimes) {
     const id = `st-${s.id}`;
-    const left = Math.round((1 - s.fill) * 100);
     const label = document.createElement('label');
     label.className = 'st';
     label.htmlFor = id;
     label.innerHTML = `<input type="radio" name="showtime" id="${id}" value="${s.id}" ${s.id === state.showtime.id ? 'checked' : ''}>
       <span class="st-date">${s.label}</span><span class="st-time">${s.time}</span>
-      <span class="st-left">${left < 25 ? 'Dernières places' : 'Places disponibles'} · simulé</span>`;
+      <span class="st-price" hidden></span>
+      <progress class="st-fill" max="100" aria-label="Remplissage simulé le ${s.label}" hidden></progress>
+      <span class="st-left">Chargement des disponibilités démo…</span>`;
     label.querySelector('input').addEventListener('change', () => {
       state.showtime = s;
       updateNavigation();
       updateUrl();
     });
     list.append(label);
+  }
+}
+
+async function updateShowtimes() {
+  try {
+    const venue = await getVenue();
+    for (const date of CONCERT.showtimes) {
+      const { takenSeatIds } = availabilityFor(venue, date);
+      const taken = new Set(takenSeatIds);
+      const filled = Math.round(taken.size / venue.seats.length * 100);
+      let price = Infinity;
+      for (const seat of venue.seats) {
+        if (!taken.has(seat.id)) price = Math.min(price, CATEGORIES[categoryOf(seat)].price);
+      }
+      const label = $(`st-${date.id}`).closest('.st');
+      const gauge = label.querySelector('.st-fill');
+      const from = label.querySelector('.st-price');
+      gauge.value = filled;
+      gauge.hidden = false;
+      from.textContent = Number.isFinite(price) ? `Dès ${price} €` : 'Complet · démo';
+      from.hidden = false;
+      label.querySelector('.st-left').textContent = `${filled} % de places occupées · démo`;
+    }
+  } catch {
+    for (const label of document.querySelectorAll('.st-left')) label.textContent = 'Disponibilités démo indisponibles';
   }
 }
 
@@ -59,15 +106,33 @@ function show(step, push) {
   updateNavigation();
   updateUrl(push && changed);
   if (changed) window.scrollTo(0, 0);
+  if (step === 'stepShow') loadHomeArt();
+  if (step === 'stepDate') updateShowtimes();
 }
 
-async function openSeatModule({ push = true, focus = true, preview = false } = {}) {
+async function openSeatModule({ push = true, focus = true, preview = false, guided = false, preset = null } = {}) {
+  const request = ++seatRequest;
   show('stepSeat', push);
-  const venue = await venuePromise;
-  if (document.body.dataset.step !== 'stepSeat') return;
+  const loading = $('planStatus'), retry = $('retryPlan');
+  loading.hidden = !!module;
+  retry.hidden = true;
+  $('planStatusText').textContent = 'Chargement du plan…';
+  let venue;
+  try {
+    venue = await getVenue();
+  } catch {
+    if (request !== seatRequest || document.body.dataset.step !== 'stepSeat') return;
+    loading.hidden = false;
+    $('planStatusText').textContent = 'Le plan est momentanément indisponible.';
+    retry.hidden = false;
+    retry.onclick = () => openSeatModule({ push: false, focus, preview, guided, preset });
+    return;
+  }
+  if (request !== seatRequest || document.body.dataset.step !== 'stepSeat') return;
+  loading.hidden = true;
   if (mountedShowtime !== state.showtime.id) {
     const view = module?.plan.getView();
-    const availability = simulateAvailability(venue, state.showtime);
+    const availability = availabilityFor(venue, state.showtime);
     if (!venue.byId.has(state.seatId)) state.seatId = null;
     module?.destroy();
     module = mountSeatPreview($('seatModule'), {
@@ -96,7 +161,9 @@ async function openSeatModule({ push = true, focus = true, preview = false } = {
     window.__demo = { module, venue, availability };
     updateUrl();
   }
-  if (preview && state.seatId) module.open(state.seatId);
+  if (guided) return module.openGuidedComparison();
+  if (preset) return module.openPreset(preset);
+  if (preview && state.seatId) return module.open(state.seatId);
   else if (focus) module.plan.canvas.focus({ preventScroll: true });
 }
 
@@ -134,6 +201,10 @@ function updateUrl(push = false) {
   const method = push ? 'pushState' : 'replaceState';
   history[method]({ concertStep: step }, '', urlFor(step));
   $('directPlan').href = urlFor('stepSeat');
+  const comparisonUrl = urlFor('stepSeat');
+  comparisonUrl.searchParams.delete('place');
+  comparisonUrl.searchParams.set('comparer', '1');
+  $('guidedComparison').href = comparisonUrl;
 }
 
 function navigate(step, { push = true, focus = true } = {}) {
@@ -153,14 +224,21 @@ $('chooseDate').addEventListener('click', () => navigate('stepDate'));
 $('goPlan').addEventListener('click', () => openSeatModule());
 $('changeSeat').addEventListener('click', () => openSeatModule());
 $('restart').addEventListener('click', () => navigate('stepShow'));
-$('directPlan').addEventListener('click', (event) => {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault();
-  openSeatModule();
-});
+for (const [id, guided] of [['directPlan', false], ['guidedComparison', true]]) {
+  $(id).addEventListener('click', (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    openSeatModule({ guided });
+  });
+}
+for (const button of document.querySelectorAll('[data-home-preset]')) {
+  button.addEventListener('click', () => openSeatModule({ preset: button.dataset.homePreset }));
+}
+wideHome.addEventListener('change', () => { if (document.body.dataset.step === 'stepShow') loadHomeArt(); });
 window.addEventListener('popstate', (event) => navigate(event.state?.concertStep, { push: false }));
-if (params.get('etape') === 'place' || params.get('apercu') === '1') {
-  openSeatModule({ push: false, focus: false, preview: params.get('apercu') === '1' });
+const guided = params.get('comparer') === '1';
+if (params.get('etape') === 'place' || params.get('apercu') === '1' || guided) {
+  openSeatModule({ push: false, focus: false, preview: params.get('apercu') === '1', guided });
 } else {
   navigate(params.get('etape') === 'date' ? 'stepDate' : 'stepShow', { push: false, focus: false });
 }

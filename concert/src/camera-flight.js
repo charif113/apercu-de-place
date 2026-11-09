@@ -2,7 +2,7 @@ const TURN = 0.33;
 const CLEAR_HEIGHT = 30;
 const TOP_FOV = 50 * Math.PI / 180;
 
-export const PLUNGE_DURATION = 2250;
+export const PLUNGE_DURATION = 1050;
 export const CUTAWAY_HEIGHT = 18;
 
 const clamp = (t) => Math.max(0, Math.min(1, t));

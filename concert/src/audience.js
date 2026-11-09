@@ -2,16 +2,17 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const CUTS = {
-  fade: { nape: 0.36, brow: 0.74, lift: 0.013, fullness: 0.009, sweep: 0.009 },
-  curls: { nape: 0.32, brow: 0.69, lift: 0.023, fullness: 0.017, texture: 0.008 },
-  waves: { nape: 0.25, brow: 0.72, lift: 0.015, fullness: 0.014, texture: 0.004 },
-  tied: { nape: 0.28, brow: 0.75, lift: 0.009, fullness: 0.009 },
+  buzz: { nape: 0.29, brow: 0.72, lift: 0.004, fullness: 0.003 },
+  fade: { nape: 0.27, brow: 0.74, lift: 0.012, fullness: 0.008, sweep: 0.009 },
+  curls: { nape: 0.23, brow: 0.69, lift: 0.020, fullness: 0.016, texture: 0.007 },
+  waves: { nape: 0.19, brow: 0.72, lift: 0.014, fullness: 0.012, texture: 0.004 },
+  tied: { nape: 0.23, brow: 0.75, lift: 0.008, fullness: 0.008 },
 };
 
 const POSES = [
   { until: 2, build: 1.02, lean: 0.052, side: -0.016, head: 0.98, turn: 0.12, cut: 'fade', hair: 0x463224, coat: 0x555342, skin: 0xb98466, clothes: 'overshirt', gesture: 'up' },
   { until: 5, build: 0.91, lean: 0.097, side: 0.014, head: 0.95, turn: -0.14, cut: 'tied', hair: 0x3d2b25, coat: 0x373948, skin: 0xc09478, clothes: 'tee', gesture: 'phone' },
-  { until: 12, build: 1.13, lean: 0.016, side: 0.012, head: 1.02, turn: 0.17, coat: 0x534951, skin: 0xa47c68, clothes: 'overshirt' },
+  { until: 12, build: 1.13, lean: 0.016, side: 0.012, head: 1.02, turn: 0.17, cut: 'buzz', hair: 0x5c4943, coat: 0x534951, skin: 0xa47c68, clothes: 'overshirt' },
   { until: 37, build: 1.00, lean: 0.036, side: -0.025, head: 0.99, turn: -0.17, cut: 'fade', hair: 0x4c3b2d, coat: 0x354353, skin: 0xb89b85, clothes: 'hoodie' },
   { until: 60, build: 1.07, lean: 0.105, side: 0.024, head: 0.95, turn: 0.16, cut: 'curls', hair: 0x3b2927, coat: 0x594450, skin: 0x916650, clothes: 'tee' },
   { until: 83, build: 0.90, lean: 0.061, side: -0.021, head: 0.94, turn: -0.11, cut: 'waves', hair: 0x745035, coat: 0x524639, skin: 0xd1a992, clothes: 'overshirt' },
@@ -83,52 +84,53 @@ function headParts(pose, close, neckX, neckZ) {
   const cut = CUTS[pose.cut];
   const skin = new THREE.Color(pose.skin);
   const hair = new THREE.Color(pose.hair ?? pose.skin);
-  const bands = cut ? (close ? [0, 0.22, 0.48, 0.72, 0.97, 1.02, 1.26, 1.53, 1.78, 2] : [0, 0.78, 1.11, 1.58, 2])
-    : (close ? HEAD.map(([t]) => t) : [0, 0.30, 0.57, 0.8, 1]);
+  const bands = close ? [0, 0.22, 0.48, 0.72, 0.96, 1.035, 1.26, 1.53, 1.78, 2] : [0, 0.78, 1.11, 1.58, 2];
   const color = new THREE.Color();
   const head = coloredRings(bands.length, close ? 18 : 6, (row, a) => {
     const s = Math.sin(a), c = Math.cos(a);
     const front = (1 - c) * 0.5;
     const band = bands[row];
-    const hairline = cut ? THREE.MathUtils.lerp(cut.nape, cut.brow, front ** 1.35) +
-      Math.sin(3 * a) * 0.012 + Math.sin(a) * 0.015 : 1;
+    const hairline = THREE.MathUtils.lerp(cut.nape, cut.brow, front ** 1.20) +
+      Math.sin(3 * a) * 0.016 + Math.sin(a) * 0.014 + Math.max(c, 0) * 0.02 * Math.cos(4 * a);
     const top = Math.max(0, band - 1);
     const t = top > 0 ? THREE.MathUtils.lerp(hairline, 1, top) : band * hairline;
     const [width, back, face, axis] = sectionAt(HEAD, t);
-    const wave = Math.sin(a * 7 + top * 9) * (cut?.texture || 0);
-    const volume = cut ? (cut.fullness + wave) * Math.sin(top * Math.PI) : 0;
+    const wave = Math.sin(a * 7 + top * 9) * (cut.texture || 0);
+    const volume = (cut.fullness + wave) * Math.sin(top * Math.PI);
     const crown = Math.sin(top * Math.PI / 2);
     // Au loin, la coiffure liée se lit comme un relief du crâne lui-même.
     const knot = !close && pose.cut === 'tied' && c > 0 ? Math.max(0, 1 - Math.abs(top - 0.58) * 4) * 0.031 * c : 0;
     const drape = !close && pose.cut === 'waves' && c > 0 && row === 2 ? 0.021 * c : 0;
     const depth = c >= 0 ? back + knot + drape : face;
-    const hairCover = cut ? THREE.MathUtils.smoothstep(band, 0.98, 1.045) : 0;
+    const hairCover = THREE.MathUtils.smoothstep(band, pose.cut === 'buzz' ? 0.76 : 0.965, 1.035);
     color.copy(skin).lerp(hair, hairCover);
-    const grain = close && cut ? Math.cos(a * 9 + top * 12) * hairCover * 0.10 : 0;
+    const grain = close ? Math.cos(a * 9 + top * 12) * hairCover * 0.085 : 0;
     const eyeSocket = close && c < -0.6 && t > 0.48 && t < 0.72 ? 0.07 : 0;
+    const collarShadow = Math.max(c, 0) * (1 - THREE.MathUtils.smoothstep(t, 0.03, 0.33)) * 0.23;
     return {
-      x: ((width + volume) * s * 1.035 + (cut?.sweep || 0) * crown) * pose.head,
-      y: (t * 0.270 + (cut?.lift || 0) * crown) * pose.head,
+      x: ((width + volume) * s + (cut.sweep || 0) * crown) * pose.head,
+      y: (t * 0.251 + cut.lift * crown) * pose.head,
       z: (axis + (depth + volume) * c) * pose.head,
       color,
-      shade: 0.99 + grain - eyeSocket,
+      shade: 0.97 + grain - eyeSocket - collarShadow,
     };
   });
   const details = [head];
   if (close) {
     for (const side of [-1, 1]) {
-      const ear = oval(side * 0.074, 0.148, 0.018, 0.011, 0.022, 0.017, pose.skin, 7, 4);
-      ear.rotateY(side * 0.06);
+      const earTone = skin.clone().multiplyScalar(0.75).getHex();
+      const ear = oval(side * 0.073, 0.137, 0.003, 0.010, 0.021, 0.016, earTone, 8, 5);
+      ear.rotateY(side * 0.035);
       details.push(ear);
     }
-    const nose = oval(0, 0.139, -0.095, 0.013, 0.021, 0.014, pose.skin, 6, 4);
+    const nose = oval(0, 0.129, -0.095, 0.012, 0.019, 0.012, pose.skin, 7, 5);
     details.push(nose);
   }
   if (close && pose.cut === 'waves') {
     // Panneau de cheveux qui s'élargit en descendant vers les épaules.
     const hair = new THREE.Color(pose.hair);
-    const locks = [[0.018, 0.060, 0.009, 0.051], [0.058, 0.085, 0.023, 0.054],
-      [0.125, 0.077, 0.024, 0.059], [0.186, 0.055, 0.014, 0.056]];
+    const locks = [[-0.004, 0.052, 0.009, 0.051], [0.045, 0.072, 0.018, 0.053],
+      [0.118, 0.074, 0.022, 0.053], [0.173, 0.055, 0.014, 0.056]];
     details.push(coloredRings(locks.length, 12, (row, a) => {
       const [y, w, d, z] = locks[row];
       return { x: w * Math.sin(a) - 0.009, y: y + Math.sin(a + row) * 0.009, z: z + d * Math.cos(a),
@@ -136,7 +138,7 @@ function headParts(pose, close, neckX, neckZ) {
     }));
   }
   if (close && pose.cut === 'tied') {
-    details.push(oval(0.012, 0.176, 0.087, 0.039, 0.034, 0.039, pose.hair, 10, 5));
+    details.push(oval(0.012, 0.157, 0.083, 0.029, 0.027, 0.028, pose.hair, 12, 6));
   }
   const rotation = new THREE.Euler(pose.lean * -0.52, pose.turn, pose.side * 2, 'YXZ');
   for (const part of details) {
@@ -210,15 +212,15 @@ function poseGeometry(pose, close) {
   const { build, lean, side, coat, clothes } = pose;
   const cloth = new THREE.Color(coat);
   const neckX = side * 0.86, neckZ = 0.018 - lean;
-  const collar = clothes === 'tee' ? 1.049 : clothes === 'hoodie' ? 1.081 : 1.072;
+  const collar = clothes === 'tee' ? 1.053 : clothes === 'hoodie' ? 1.086 : 1.076;
   const torso = [
     [0.429, 0.097, 0.076, 0, 0.030, 0.83],
     [0.486, 0.148, 0.104, 0, 0.042, 0.89],
     [0.596, 0.142, 0.102, side * 0.23, 0.043, 0.94],
     [0.718, 0.140, 0.113, side * 0.46, 0.028 - lean * 0.23, 1.00],
     [0.854, 0.169 * build, 0.110, side * 0.69, 0.018 - lean * 0.58, 0.95],
-    [0.944, 0.171 * build, 0.099, side, 0.021 - lean * 0.84, 1.03],
-    [0.991, 0.129 * build, 0.073, side, neckZ, 1.06],
+    [0.952, 0.167 * build, 0.099, side, 0.021 - lean * 0.84, 1.01],
+    [1.001, 0.125 * build, 0.073, side, neckZ, 0.97],
     [1.023, 0.076, 0.060, neckX, neckZ, 0.93],
     [collar - 0.014, 0.058, 0.053, neckX, neckZ + 0.005, 0.81],
     [collar, 0.046, 0.044, neckX, neckZ + 0.006, 1.08],
@@ -235,7 +237,7 @@ function poseGeometry(pose, close) {
       y: y - (shoulder ? (1 - curve * curve) * 0.023 : 0),
       z: z + (depth + fold + (curve > 0 && i === 4 ? 0.010 : 0)) * curve,
       color: cloth,
-      shade: shade + yoke + (close ? Math.cos(a * 4 + i * 0.8) * 0.055 : 0),
+      shade: shade + yoke + (close ? Math.cos(a * 4 + i * 0.8) * 0.038 : 0),
     };
   });
   const parts = [body, ...headParts(pose, close, neckX, neckZ)];
@@ -286,6 +288,7 @@ export class AudienceModel {
   constructor(venue, scene) {
     this.root = new THREE.Group();
     this.root.name = 'public-simule';
+    this.root.visible = false;
     scene.add(this.root);
     const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.98, metalness: 0 });
     const seats = POSES.map(() => []);
@@ -339,8 +342,9 @@ export class AudienceModel {
         const detail = observer && Math.hypot(seat.x - observer.x, seat.z - observer.z) <= detailedRadius;
         const mesh = detail ? close : far;
         p.set(seat.x + ((seed % 11) - 5) * 0.004, seat.y, seat.z + ((seed % 7) - 3) * 0.009);
-        q.setFromEuler(e.set(0, seat.yaw + ((seed % 15) - 7) * 0.019, 0));
-        scale.set(0.94 + (seed % 9) * 0.014, 0.93 + (seed % 13) * 0.012, 1);
+        // Les chaises du parterre regardent vers -Z, comme les silhouettes.
+        q.setFromEuler(e.set(0, seat.yaw + ((seed % 15) - 7) * 0.014, 0));
+        scale.set(0.94 + (seed % 9) * 0.014, 0.95 + (seed % 13) * 0.009, 1);
         matrix.compose(p, q, scale);
         mesh.setMatrixAt(mesh.count, matrix);
         mesh.setColorAt(mesh.count++, color.set(TINTS[(seed >>> 16) % TINTS.length]));

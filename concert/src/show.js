@@ -47,6 +47,48 @@ function makeTexture(width, height, draw) {
   return texture;
 }
 
+export function stageDeckTexture() {
+  const texture = makeTexture(256, 128, (c, w, h) => {
+    const panels = ['#29282b', '#27272a', '#2b292b', '#252528'];
+    c.fillStyle = panels[0];
+    c.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 16) {
+      for (let x = -32; x < w; x += 32) {
+        const offset = x + (y % 32);
+        c.fillStyle = panels[((x + 32) / 32 + y / 16 * 3) % panels.length];
+        c.fillRect(offset, y, 32, 16);
+        c.fillStyle = '#1a1b1e';
+        c.fillRect(offset, y, 0.65, 16);
+      }
+      c.fillStyle = '#1c1d20';
+      c.fillRect(0, y, w, 0.65);
+    }
+    for (let i = 0; i < 256; i++) {
+      c.fillStyle = i % 3 ? '#91887d1f' : '#10111638';
+      c.fillRect((i * 103) % w, (i * i * 29 + 13 * i) % h, i % 11 + 1, 0.55);
+    }
+  });
+  texture.anisotropy = 4;
+  return texture;
+}
+
+export function stageSkirtTexture() {
+  return makeTexture(256, 32, (c, w, h) => {
+    for (let x = 0; x < w; x++) {
+      const fold = 37 + Math.round(Math.cos(x * Math.PI / 4) * 6 + Math.sin(x * 0.21) * 2);
+      c.fillStyle = `rgb(${fold},${fold + 1},${fold + 3})`;
+      c.fillRect(x, 0, 1, h);
+    }
+    const shadow = c.createLinearGradient(0, 0, 0, h);
+    shadow.addColorStop(0, '#06060d77');
+    shadow.addColorStop(0.26, '#06060d00');
+    shadow.addColorStop(0.82, '#06060d00');
+    shadow.addColorStop(1, '#06060d99');
+    c.fillStyle = shadow;
+    c.fillRect(0, 0, w, h);
+  });
+}
+
 function typography(c, title, x, y, size, gap, color) {
   c.font = `700 ${size}px system-ui, sans-serif`;
   c.fillStyle = color;
@@ -99,32 +141,10 @@ function ledWall(c, w, h) {
   typography(c, 'T O U R N É E   H O R I Z O N', 50, 128, 12, 0.4, '#e5b09f');
 }
 
-function closeup(c, w, h) {
+function screenSlate(c, w, h) {
   horizon(c, w, h);
-  c.save();
-  c.translate(w * 0.56, h * 0.45);
-  c.scale(w / 320, h / 180);
-  c.fillStyle = '#0c1322';
-  c.strokeStyle = '#d9917c';
-  c.lineWidth = 1.1;
-  c.beginPath();
-  c.moveTo(-96, 112); c.bezierCurveTo(-91, 69, -39, 63, -24, 54);
-  c.bezierCurveTo(-20, 47, -20, 40, -23, 32);
-  c.bezierCurveTo(-37, 15, -34, -16, -17, -29);
-  c.bezierCurveTo(0, -40, 26, -35, 29, -13);
-  c.bezierCurveTo(30, 0, 35, 4, 42, 13);
-  c.lineTo(35, 20); c.bezierCurveTo(36, 36, 28, 44, 13, 45);
-  c.lineTo(16, 57); c.bezierCurveTo(31, 65, 76, 68, 95, 112);
-  c.closePath();
-  c.fill();
-  c.stroke();
-  c.fillStyle = '#121827';
-  c.fillRect(46, 29, 5, 98);
-  c.beginPath();
-  c.ellipse(52, 28, 13, 5, -0.3, 0, Math.PI * 2);
-  c.fill();
-  c.restore();
-  typography(c, 'NOVA LIGNE', 17, 28, 15, 1.6, '#eadbe4');
+  typography(c, 'NOVA LIGNE', w * 0.095, h * 0.30, 28, 3, '#eadbe4');
+  typography(c, 'T O U R N É E   H O R I Z O N', w * 0.10, h * 0.41, 11, 0.2, '#e5b09f');
 }
 
 function sourceHalo(c, w, h) {
@@ -136,6 +156,26 @@ function sourceHalo(c, w, h) {
   falloff.addColorStop(1, '#fff0');
   c.fillStyle = falloff;
   c.fillRect(0, 0, w, h);
+}
+
+function feedBackdrop(c, w, h) {
+  c.fillStyle = '#101422';
+  c.fillRect(0, 0, w, h);
+  for (const [x, y, r, color] of [[0.54, 0.35, 0.48, '#d98259'], [0.10, 0.72, 0.32, '#3b5198'], [0.94, 0.45, 0.28, '#743d61']]) {
+    const halo = c.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * w);
+    halo.addColorStop(0, color);
+    halo.addColorStop(0.24, color + 'a6');
+    halo.addColorStop(1, color + '00');
+    c.fillStyle = halo;
+    c.fillRect(0, 0, w, h);
+  }
+  for (const [x, y, r] of [[0.17, 0.26, 3.8], [0.21, 0.26, 1.8], [0.78, 0.66, 4.0], [0.80, 0.63, 2.7], [0.84, 0.67, 1.8], [0.93, 0.31, 2.2]]) {
+    const bokeh = c.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * 2.5);
+    bokeh.addColorStop(0, '#ffe0abaf');
+    bokeh.addColorStop(1, '#ffe0ab00');
+    c.fillStyle = bokeh;
+    c.fillRect(x * w - r * 3, y * h - r * 3, r * 6, r * 6);
+  }
 }
 
 function ringSurface(sides, levels, point) {
@@ -445,9 +485,9 @@ export class ConcertShow {
     this.tour = tour;
     this.workLights = false;
     this.enabled = true;
+    this.players = [];
     this.buildStage();
     this.buildLights();
-    this.update(2);
   }
 
   buildStage() {
@@ -455,11 +495,22 @@ export class ConcertShow {
     const cabinet = standard(0x151a21, { roughness: 0.69 });
     const dark = standard(0x151921);
     const frame = standard(0x353d4d, { metalness: 0.58, roughness: 0.49 });
-    const led = new THREE.MeshBasicMaterial({ map: makeTexture(768, 336, ledWall), toneMapped: false });
-    this.screenArtwork = makeTexture(384, 216, closeup);
+    this.ledMaterial = new THREE.MeshBasicMaterial({ map: makeTexture(768, 336, ledWall), toneMapped: false });
+    this.screenArtwork = makeTexture(384, 216, screenSlate);
     this.sideScreenMaterial = new THREE.MeshBasicMaterial({ map: this.screenArtwork, toneMapped: false });
+    const halo = makeTexture(64, 64, sourceHalo);
+    // Un halo local derrière les dalles laisse le reste de la salle en demi-teinte.
+    this.displayGlows = new THREE.Group();
+    this.tour.add(this.displayGlows);
+    const glow = (width, height, x, y, z, yaw = 0) => {
+      const plane = mesh(this.displayGlows, new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({
+        map: halo, color: CORAL, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.27, depthWrite: false, toneMapped: false,
+      }), x, y, z);
+      plane.rotation.y = yaw;
+    };
     box(this.tour, [17.2, 7.68, 0.23], cabinet, 0, Y + 4.93, -11.67);
-    mesh(this.tour, new THREE.PlaneGeometry(16.9, 7.4), led, 0, Y + 4.93, -11.54);
+    mesh(this.tour, new THREE.PlaneGeometry(16.9, 7.4), this.ledMaterial, 0, Y + 4.93, -11.54);
+    glow(29, 12.8, 0, Y + 4.93, -11.58);
     for (const sx of [-1, 1]) {
       const display = new THREE.Group();
       display.position.set(sx * 17.2, 8.6, -1.2);
@@ -467,6 +518,7 @@ export class ConcertShow {
       box(display, [6.63, 3.83, 0.18], cabinet, 0, 0, -0.09);
       mesh(display, new THREE.PlaneGeometry(6.4, 3.6), this.sideScreenMaterial, 0, 0, 0.01);
       this.tour.add(display);
+      glow(10.4, 6.4, sx * 17.2, 8.6, -1.24, display.rotation.y);
       const array = new THREE.Group();
       const body = new THREE.BoxGeometry(1.2, 0.32, 0.58);
       const bodies = new THREE.InstancedMesh(body, cabinet, 12);
@@ -494,16 +546,13 @@ export class ConcertShow {
       segment(this.tour, [x, Y + 0.47, -8.2], [x, Y + 1.55, -8.2], 0.012, 0.009, frame, 5);
       mesh(this.tour, new THREE.CylinderGeometry(0.3, 0.34, 0.025, 16), brass, x, Y + 1.55, -8.2);
     }
-    // Le musicien central sert toujours de repère d’échelle (1,77 m).
-    const lead = player(this.scene, ARTIST.x, Y, ARTIST.z, -0.1, true);
-    this.players = [lead, player(this.tour, -5.9, Y, -5.2, 0.26), player(this.tour, 6.1, Y, -5.9, -0.36)];
   }
 
   buildScreenFeed() {
     const source = this.players[0].rig;
     const performer = source.clone(true);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x101623);
+    scene.background = makeTexture(384, 216, feedBackdrop);
     scene.add(performer);
     // Partage des géométries et des matériaux avec le musicien sur scène.
     // Seules les transformations locales sont recopiées dans la scène vidéo.
@@ -511,26 +560,24 @@ export class ConcertShow {
     source.traverse((part) => originals.push(part));
     performer.traverse((part) => copies.push(part));
 
-    const backdrop = makeTexture(384, 216, horizon);
     const Y = this.venue.stage.height;
-    const backdropMesh = mesh(scene, new THREE.PlaneGeometry(6.4, 3.6),
-      new THREE.MeshBasicMaterial({ map: backdrop, toneMapped: false }), ARTIST.x - 0.65, Y + 1.57, ARTIST.z - 1.35);
-    const fill = new THREE.HemisphereLight(0xb3c7ef, 0x5a3c36, 1.15);
-    const key = new THREE.DirectionalLight(0xffd1bb, 1.65);
-    key.position.set(-2.2, 3.5, 4.2);
-    const rim = new THREE.DirectionalLight(0x91aaff, 1.05);
-    rim.position.set(2.5, 2.7, -2);
-    scene.add(fill, key, rim);
+    const fill = new THREE.HemisphereLight(0x9aaac6, 0x5a3c36, 0.26);
+    const rim = new THREE.DirectionalLight(0xffbe8d, 2.4);
+    rim.position.set(-1.5, 1.2, -3.1);
+    const side = new THREE.DirectionalLight(0x779be9, 0.68);
+    side.position.set(-2, 0.8, 0.1);
+    scene.add(fill, rim, side);
 
-    const camera = new THREE.PerspectiveCamera(25, SCREEN_WIDTH / SCREEN_HEIGHT, 0.1, 20);
-    camera.position.set(ARTIST.x + 1.02, Y + 1.48, ARTIST.z + 2.65);
-    camera.lookAt(ARTIST.x - 0.10, Y + 1.30, ARTIST.z + 0.04);
+    // Cadrage taille et contre-jour : l'instrument et la silhouette restent lisibles au fond.
+    const camera = new THREE.PerspectiveCamera(26, SCREEN_WIDTH / SCREEN_HEIGHT, 0.1, 20);
+    camera.position.set(ARTIST.x + 2.10, Y + 1.39, ARTIST.z + 2.75);
+    camera.lookAt(ARTIST.x - 0.15, Y + 1.22, ARTIST.z + 0.04);
     const target = new THREE.WebGLRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT);
-    this.screenFeed = { scene, camera, target, originals, copies, backdropMesh, lastFrame: -Infinity };
+    this.screenFeed = { scene, camera, target, originals, copies, lastFrame: -Infinity };
   }
 
   renderScreens(renderer, now, animated) {
-    if (!this.enabled || this.workLights || this.screenFeedFailed) return;
+    if (!this.enabled || this.workLights || !this.players.length || this.screenFeedFailed) return;
     const current = this.screenFeed;
     if (current && this.sideScreenMaterial.map === current.target.texture &&
         (animated ? now - current.lastFrame < SCREEN_INTERVAL : current.still)) return;
@@ -564,9 +611,7 @@ export class ConcertShow {
     const feed = this.screenFeed;
     if (!feed) return;
     feed.target.dispose();
-    feed.backdropMesh.geometry.dispose();
-    feed.backdropMesh.material.map.dispose();
-    feed.backdropMesh.material.dispose();
+    feed.scene.background.dispose();
     this.screenFeed = null;
   }
 
@@ -574,7 +619,10 @@ export class ConcertShow {
     const Y = this.venue.stage.height;
     this.room = new THREE.HemisphereLight(0x9cabcf, 0x57505b, 1.5);
     this.house = new THREE.AmbientLight(0xbbbed8, 0.69);
-    this.scene.add(this.room, this.house);
+    this.workSpot = new THREE.SpotLight(0xffefe1, 380, 29, 0.86, 0.85, 1.6);
+    this.workSpot.position.set(0, 13.8, 8.2);
+    this.workSpot.target.position.set(0, Y * 0.6, -4.5);
+    this.scene.add(this.room, this.house, this.workSpot, this.workSpot.target);
     const lightRig = new THREE.Group();
     lightRig.name = 'eclairage-tournee';
     this.tour.add(lightRig);
@@ -622,7 +670,7 @@ export class ConcertShow {
     // Deux débords diffus vers les premiers rangs donnent un liseré sur les
     // coques et le public. Le reste de la salle reste lisible en demi-teinte.
     for (const [x, z, color] of [[-8.7, 0.6, BLUE], [9.2, -0.5, CORAL]]) {
-      const spill = new THREE.PointLight(color, 78, 39, 1.5);
+      const spill = new THREE.PointLight(new THREE.Color(color).lerp(new THREE.Color(0xffeddf), 0.23), 48, 32, 1.6);
       spill.position.set(x, 5.1, z);
       lightRig.add(spill);
       const pool = mesh(lightRig, new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
@@ -635,7 +683,7 @@ export class ConcertShow {
 
   setTourGear(on) {
     this.enabled = on;
-    for (const gear of this.players[0].gear) gear.visible = on;
+    for (const gear of this.players[0]?.gear ?? []) gear.visible = on;
     if (!on) this.update(2);
     this.setLightLevel();
   }
@@ -645,13 +693,28 @@ export class ConcertShow {
     this.setLightLevel();
   }
 
+  setPerformersVisible(visible) {
+    if (visible && !this.players.length) {
+      const Y = this.venue.stage.height;
+      this.players = [player(this.scene, ARTIST.x, Y, ARTIST.z, -0.1, true),
+        player(this.tour, -5.9, Y, -5.2, 0.26), player(this.tour, 6.1, Y, -5.9, -0.36)];
+      for (const gear of this.players[0].gear) gear.visible = this.enabled;
+    }
+    for (const { rig } of this.players) rig.visible = visible;
+  }
+
   setLightLevel() {
     const work = this.workLights;
     const concert = this.enabled && !work;
     this.lightRig.visible = concert;
-    this.house.color.set(work ? 0xfff4e5 : 0xbbbed8);
-    this.house.intensity = work ? 2.45 : concert ? 0.69 : 1.04;
-    this.room.intensity = work ? 1.8 : concert ? 1.5 : 1.7;
+    this.displayGlows.visible = concert;
+    this.workSpot.visible = work;
+    this.ledMaterial.color.setScalar(work ? 0.24 : 1);
+    this.sideScreenMaterial.color.setScalar(work ? 0.17 : 1);
+    this.house.color.set(work ? 0xe9e8e5 : 0xbbbed8);
+    this.house.intensity = work ? 1.65 : concert ? 0.69 : 1.04;
+    this.room.color.set(work ? 0xe0e6ed : 0x9cabcf);
+    this.room.intensity = work ? 1.75 : concert ? 1.5 : 1.7;
     this.scene.fog.color.set(INK);
     this.scene.fog.density = work ? 0.002 : concert ? 0.0062 : 0.0044;
     if (!concert) this.sideScreenMaterial.map = this.screenArtwork;

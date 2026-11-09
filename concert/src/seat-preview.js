@@ -17,6 +17,8 @@ import { ZONES, seatLabel, zoneLabel, seatMetrics, obstructions } from './venue.
 import { drawFixedView } from './fallback.js';
 
 const fmt = (n, d = 0) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const compactPresetLabels = { proche: 'Proche', lateral: 'Latéral', haut: 'Haut' };
+const emptyAudience = new Set();
 const h = (tag, attrs = {}, ...kids) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -58,7 +60,7 @@ export function mountSeatPreview(root, opts) {
   const forceFixed = params.get('vue') === 'fixe';
   const state = {
     selected: null, compare: null, active: 'A', zone: null, category: null,
-    tourGear: true, audience: true, noMotion: matchMedia('(prefers-reduced-motion: reduce)').matches || localStorageGet('noMotion') === '1',
+    tourGear: true, mode: 'empty', noMotion: matchMedia('(prefers-reduced-motion: reduce)').matches || localStorageGet('noMotion') === '1',
   };
   document.documentElement.classList.toggle('no-motion', state.noMotion);
   // ----- squelette -----------------------------------------------------------
@@ -87,7 +89,7 @@ export function mountSeatPreview(root, opts) {
     h('button', { type: 'button', 'aria-label': 'Dézoomer', onclick: () => plan.zoomBy(1 / 1.5) }, '−'),
     h('button', { type: 'button', 'aria-label': 'Plan entier', class: 'fit', onclick: () => { goZone(null); } }, '⤢'),
   );
-  const legend = h('ul', { class: 'sp-legend', 'aria-label': 'Légende et tarifs simulés' },
+  const legend = h('ul', { class: 'sp-legend', tabindex: 0, 'aria-label': 'Légende et tarifs simulés' },
     ...Object.entries(categories).map(([k, c]) => h('li', {},
       h('button', { type: 'button', class: 'cat', 'aria-pressed': 'false', 'data-cat': k, onclick: () => toggleCategory(k) },
         h('i', { style: `background:${c.color}`, 'aria-hidden': 'true' }), `${c.label} `, h('b', {}, `${c.price} €`)))),
@@ -101,7 +103,8 @@ export function mountSeatPreview(root, opts) {
   const main = h('div', { class: 'sp-main' },
     h('div', { class: 'sp-planwrap' }, planBox, zoomBox, hint),
     h('aside', { class: 'sp-side' }, presetBar, h('div', { class: 'sp-drawer' },
-      context.subtitle ? h('p', { class: 'sp-side-date' }, context.subtitle) : null, sheet, legend,
+      context.subtitle ? h('p', { class: 'sp-side-date' }, context.subtitle) : null, sheet,
+      h('div', { class: 'sp-legend-shell' }, h('span', { class: 'sp-legend-cue', 'aria-hidden': 'true' }, 'Tarifs ↔'), legend),
       h('details', { class: 'sp-more' }, h('summary', {}, 'Plus d’options'), picker, motionToggle))),
   );
   root.append(live, head, zoneBar, main);
@@ -121,6 +124,7 @@ export function mountSeatPreview(root, opts) {
       if (how?.keyboard && !pickingB) openPreview(s);
     },
     onFocusSeat: (s) => announce(describe(s, true)),
+    onZone: goZone,
   });
   plan.setState({ taken });
 
@@ -141,13 +145,36 @@ export function mountSeatPreview(root, opts) {
     presetList.replaceChildren(...presets.map((p) => h('button', {
       type: 'button', class: 'preset', 'data-preset': p.key,
       'aria-label': `Vue ${p.label} : ${seatLabel(p.seat)}`,
-      onclick: () => {
-        const pickingB = state.pickingB;
-        select(p.seat, { silent: true });
-        if (!pickingB) openPreview(p.seat);
-      },
-    }, h('span', { class: `preset-ico ico-${p.key}`, 'aria-hidden': 'true' }),
-    h('span', { class: 'preset-t' }, p.label), h('span', { class: 'preset-s' }, p.hint))));
+      onclick: () => openPreset(p.key),
+    }, h('img', { class: 'preset-photo', src: new URL(`../assets/previews/${p.key}.webp`, import.meta.url).href,
+      width: 320, height: 180, alt: '', loading: 'lazy', decoding: 'async' }),
+    h('span', { class: 'preset-t' }, compactPresetLabels[p.key]), h('span', { class: 'preset-s' }, p.hint))));
+  }
+
+  function openPreset(key) {
+    if (!v3.el.hidden) return;
+    const pickingB = state.pickingB;
+    const preset = choosePresets(venue, taken, pickingB ? state.selected : null).find((item) => item.key === key);
+    if (!preset) return;
+    if (pickingB) return select(preset.seat, { silent: true });
+    return openPreview(preset.seat);
+  }
+
+  function openGuidedComparison() {
+    if (!v3.el.hidden) return;
+    const presets = choosePresets(venue, taken);
+    const A = presets.find((item) => item.key === 'lateral')?.seat;
+    const B = presets.find((item) => item.key === 'haut')?.seat;
+    if (!A || !B) {
+      announce('Les deux places de comparaison ne sont pas disponibles pour cette séance.');
+      return;
+    }
+    state.pickingB = false;
+    hint.hidden = true;
+    state.compare = B.id;
+    select(A, { silent: true });
+    renderPresets();
+    return openPreview(A);
   }
 
   function describe(s, short = false) {
@@ -180,8 +207,7 @@ export function mountSeatPreview(root, opts) {
       renderPresets();
       state.compare = s.id;
       plan.setState({ compare: s.id });
-      openPreview(venue.byId.get(state.selected), 'B');
-      return;
+      return openPreview(venue.byId.get(state.selected), 'B');
     }
     state.selected = s.id;
     if (state.compare === s.id) state.compare = null;
@@ -197,6 +223,20 @@ export function mountSeatPreview(root, opts) {
     const s = venue.byId.get(state.selected);
     if (!s) {
       sheet.append(h('p', { class: 'sp-seat-help' }, 'Zoomez sur le plan pour choisir un siège.'));
+      const suggested = suggestedSeat();
+      if (suggested) {
+        const category = categories[categoryOf(suggested)];
+        const distance = fmt(seatMetrics(venue, suggested).dist);
+        sheet.append(h('div', { class: 'sp-recommendation' },
+          h('p', { class: 'sp-h' }, 'Suggestion de place libre'),
+          h('strong', {}, seatLabel(suggested)),
+          h('p', { class: 'seat-meta' }, `${category.price} € démo · ${distance} m de l’artiste`),
+          h('button', { type: 'button', class: 'btn ghost', onclick: () => {
+            select(suggested);
+            plan.centerOn(suggested, 14);
+            root.querySelector('#spOpen')?.focus({ preventScroll: true });
+          } }, 'Repérer sur le plan')));
+      }
       return;
     }
     const m = seatMetrics(venue, s);
@@ -212,11 +252,23 @@ export function mountSeatPreview(root, opts) {
         h('div', {}, h('dt', {}, 'Tête à tourner'), h('dd', {}, `${fmt(Math.abs(m.turn))}°`)),
       ),
       maskText(mk) ? h('p', { class: 'warn' }, maskText(mk)) : null,
+      h('p', { class: 'sp-estimate', id: 'spEstimate' }, 'Vue simulée · hauteurs estimées'),
       h('div', { class: 'actions' },
         h('button', { type: 'button', class: 'btn primary', id: 'spOpen', onclick: () => openPreview(s) }, 'Voir depuis cette place'),
-        h('button', { type: 'button', class: 'btn ghost', id: 'spConfirm', disabled: isTaken, onclick: () => confirm(s) }, isTaken ? 'Place vendue' : 'Choisir'),
+        h('button', { type: 'button', class: 'btn ghost', id: 'spConfirm', 'aria-describedby': 'spEstimate', disabled: isTaken, onclick: () => confirm(s) }, isTaken ? 'Place vendue' : 'Choisir'),
       ),
     ].filter(Boolean));
+  }
+
+  function suggestedSeat() {
+    let suggested = null, best = Infinity;
+    for (const seat of venue.seats) {
+      if (taken.has(seat.id) || seat.pmr || seat.companion) continue;
+      const { dist, turn } = seatMetrics(venue, seat);
+      const score = Math.abs(dist - 34) + Math.abs(turn) * 0.5 + Math.abs(seat.x) * 0.35;
+      if (score < best) { suggested = seat; best = score; }
+    }
+    return suggested;
   }
 
   function confirm(s) {
@@ -256,7 +308,7 @@ export function mountSeatPreview(root, opts) {
     }
   }
 
-  function exportActiveView() {
+  async function exportActiveView() {
     const seat = currentSeat();
     const source = v3.fixed ? v3.still : v3.canvas;
     if (!seat || !source.width || !source.height) return;
@@ -278,7 +330,22 @@ export function mountSeatPreview(root, opts) {
       ctx.fillText(`${context.title || 'Aperçu de place'} · VUE SIMULÉE`, font, image.height - font * 1.8, image.width - font * 2);
       ctx.fillStyle = '#f9f4ec';
       ctx.fillText(seatLabel(seat), font, image.height - font * 0.55, image.width - font * 2);
-      h('a', { href: image.toDataURL('image/png'), download: `vue-${seat.id}.png` }).click();
+      const filename = `vue-${seat.id}.png`;
+      const png = image.toDataURL('image/png');
+      if (navigator.share && navigator.canShare) {
+        try {
+          // Garde le geste utilisateur actif jusqu’à l’ouverture de la feuille de partage.
+          const bytes = Uint8Array.from(atob(png.slice(png.indexOf(',') + 1)), (char) => char.charCodeAt(0));
+          const files = [new File([bytes], filename, { type: 'image/png' })];
+          if (navigator.canShare({ files })) {
+            await navigator.share({ files, title: seatLabel(seat) });
+            return;
+          }
+        } catch (error) {
+          if (error.name === 'AbortError') return;
+        }
+      }
+      h('a', { href: png, download: filename }).click();
       shareStatus.textContent = 'Image préparée pour le téléchargement.';
     } catch {
       shareStatus.textContent = 'L’image n’a pas pu être enregistrée. Le lien de la place reste disponible.';
@@ -342,51 +409,69 @@ export function mountSeatPreview(root, opts) {
     const abA = h('button', { type: 'button', class: 'ab', 'data-ab': 'A', 'aria-pressed': 'true', onclick: () => showSide('A') });
     const abB = h('button', { type: 'button', class: 'ab', 'data-ab': 'B', 'aria-pressed': 'false', onclick: () => showSide('B') });
     const abBox = h('div', { class: 'v3-ab', role: 'group', 'aria-label': 'Comparer deux places' }, abA, abB);
-    const cmpMenu = h('div', { class: 'v3-cmp', hidden: true, id: 'v3CmpMenu' });
+    const modes = h('div', { class: 'v3-modes', id: 'v3Mode', role: 'group', 'aria-label': 'Ambiance de la vue' },
+      ...[['empty', 'Salle vide'], ['concert', 'Ambiance concert']].map(([mode, text]) => h('button', {
+        type: 'button', 'data-mode': mode, 'aria-pressed': String(state.mode === mode),
+        onclick: () => {
+          if (state.mode === mode) return;
+          state.mode = mode;
+          layer.syncToggles();
+          layer.view?.setPreviewMode(mode);
+          if (layer.fixed) refreshInfo();
+        },
+      }, text)));
+    const cmpMenu = h('div', { class: 'v3-cmp', hidden: true, id: 'v3CmpMenu', role: 'group', 'aria-label': 'Comparer avec' });
     const renderComparePresets = () => {
-      cmpMenu.replaceChildren(h('p', {}, 'Comparer avec :'),
-        ...choosePresets(venue, taken, state.selected).map((p) => h('button', {
+      cmpMenu.replaceChildren(...choosePresets(venue, taken, state.selected).map((p) => h('button', {
           type: 'button', class: 'btn small', 'data-cmp': p.key,
           'aria-label': `Comparer avec ${p.label.toLowerCase()}, ${seatLabel(p.seat)}`,
           onclick: () => setCompare(p.seat),
-        }, p.label)),
-        h('button', { type: 'button', class: 'btn small', onclick: () => pickOnPlan() }, 'Une place du plan'));
+        }, compactPresetLabels[p.key])),
+        h('button', { type: 'button', class: 'btn small', 'aria-label': 'Comparer avec une place du plan', onclick: () => pickOnPlan() }, 'Sur le plan'));
     };
     const cmpBtn = h('button', {
       type: 'button', class: 'btn small', id: 'v3Compare', 'aria-expanded': 'false', 'aria-controls': 'v3CmpMenu',
       onclick: () => {
-        if (cmpMenu.hidden) renderComparePresets();
+        if (cmpMenu.hidden) {
+          more.open = false;
+          renderComparePresets();
+        }
         cmpMenu.hidden = !cmpMenu.hidden;
         cmpBtn.setAttribute('aria-expanded', String(!cmpMenu.hidden));
       },
     }, 'Comparer');
     const tg = h('input', { type: 'checkbox', checked: true, onchange: (e) => { state.tourGear = e.target.checked; layer.view?.setTourGear(state.tourGear); refreshInfo(); } });
-    const au = h('input', { type: 'checkbox', checked: true, onchange: (e) => { state.audience = e.target.checked; layer.view?.setAudience(taken, state.audience); } });
     const nm = h('input', { type: 'checkbox', onchange: (e) => { setNoMotion(e.target.checked); } });
     const info = h('div', { class: 'v3-info' });
-    const choose = h('button', { type: 'button', class: 'btn primary', id: 'v3Choose', onclick: () => { const s = currentSeat(); if (s) { close(); select(s, { silent: true }); confirm(s); } } }, 'Choisir cette place');
+    const choose = h('button', { type: 'button', class: 'btn primary', id: 'v3Choose', 'aria-describedby': 'v3Estimate', onclick: () => { const s = currentSeat(); if (s) { close(); select(s, { silent: true }); confirm(s); } } }, 'Choisir cette place');
     const closeBtn = h('button', { type: 'button', class: 'v3-close', id: 'v3Back', 'aria-label': 'Retour au plan', onclick: () => close() }, '‹ Plan');
     const recenter = h('button', { type: 'button', class: 'v3-round', 'aria-label': 'Recentrer le regard sur l’artiste', onclick: () => layer.view?.recenter() }, '◎');
+    const skip = h('button', { type: 'button', class: 'v3-skip', id: 'v3Skip', 'aria-label': 'Passer la plongée', onclick: () => {
+      if (layer.view?.skipFlight()) canvas.focus({ preventScroll: true });
+    } }, 'Touchez pour passer la plongée');
     const sum = h('p', { class: 'v3-sum', id: 'v3Sum' });
     const mask = h('p', { class: 'v3-mask', id: 'v3Mask', hidden: true, role: 'status' });
     const more = h('details', { class: 'v3-more' },
-      h('summary', {}, 'Plus'),
+      h('summary', { 'aria-label': 'Détails de la vue' },
+        h('span', { class: 'v3-estimate', id: 'v3Estimate' }, 'Vue simulée · hauteurs estimées'),
+        h('span', { class: 'v3-details-label' }, 'Détails', h('i', { 'aria-hidden': 'true' }))),
       sum,
       info,
       h('div', { class: 'v3-opts' },
         h('label', { class: 'toggle' }, tg, ' Équipement de tournée'),
-        h('label', { class: 'toggle' }, au, ' Public simulé'),
         h('label', { class: 'toggle' }, nm, ' Sans animation')),
-      h('div', { class: 'v3-share' },
-        h('button', { type: 'button', class: 'btn small', id: 'v3Share' }, 'Partager cette vue'),
-        h('button', { type: 'button', class: 'btn small', id: 'v3Export' }, 'Enregistrer une image')),
+      h('div', { class: 'v3-share', role: 'group', 'aria-labelledby': 'v3ShareLabel' },
+        h('p', { class: 'v3-share-title', id: 'v3ShareLabel' }, 'Partager cette vue'),
+        h('button', { type: 'button', class: 'btn small', id: 'v3Share' }, 'Partager le lien'),
+        h('button', { type: 'button', class: 'btn small', id: 'v3Export', title: 'Partager ou télécharger l’image' }, 'Image PNG')),
       h('p', { class: 'v3-share-status', id: 'v3ShareStatus', 'aria-live': 'polite' }));
-    const panel = h('div', { class: 'v3-panel' }, cmpMenu, more, h('div', { class: 'v3-row' }, cmpBtn, choose));
+    more.addEventListener('toggle', () => { if (more.open) hideCompare(); });
+    const panel = h('div', { class: 'v3-panel' }, more, cmpMenu, h('div', { class: 'v3-row' }, cmpBtn, choose));
     const loading = h('div', { class: 'v3-loading', hidden: true }, 'Chargement de la salle…');
     const el = h('div', { class: 'v3', hidden: true, role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Vue depuis la place' },
-      canvas, still, fade, loading,
+      canvas, still, fade, loading, skip,
       h('div', { class: 'v3-top' }, closeBtn, label, recenter),
-      h('div', { class: 'v3-mid' }, abBox, mask),
+      h('div', { class: 'v3-mid' }, modes, abBox, mask),
       panel,
       h('p', { class: 'v3-fov' }, 'Champ horizontal 70° · hauteurs estimées'));
     el.addEventListener('keydown', (e) => {
@@ -401,8 +486,11 @@ export function mountSeatPreview(root, opts) {
     });
     const layer = {
       el, canvas, still, fade, view: null, fixed: false,
-      syncToggles() { nm.checked = state.noMotion; },
-      info, label, abA, abB, abBox, cmpMenu, cmpBtn, renderComparePresets, loading, sum, mask,
+      syncToggles() {
+        nm.checked = state.noMotion;
+        for (const button of modes.children) button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode));
+      },
+      info, label, abA, abB, abBox, cmpMenu, cmpBtn, renderComparePresets, loading, sum, mask, more,
     };
     return layer;
   }
@@ -434,6 +522,7 @@ export function mountSeatPreview(root, opts) {
     v3.syncToggles();
     state.active = side;
     hideCompare();
+    v3.more.open = false;
     if (!v3.view && !v3.fixed) {
       v3.el.classList.add('is-loading');
       v3.loading.hidden = false;
@@ -442,7 +531,7 @@ export function mountSeatPreview(root, opts) {
         const mod = await import('./view3d.js');
         if (viewTicket !== ticket) return;
         if (!mod.webglAvailable()) throw new Error('WebGL indisponible');
-        v3.view = new mod.SeatView3D(v3.canvas, venue, { taken, audience: state.audience, tourGear: state.tourGear });
+        v3.view = new mod.SeatView3D(v3.canvas, venue, { taken, mode: state.mode, tourGear: state.tourGear });
         v3.view.setStill(state.noMotion);
         window.__view3d = v3.view;
       } catch (err) {
@@ -455,8 +544,9 @@ export function mountSeatPreview(root, opts) {
       v3.el.classList.remove('is-loading');
     }
     v3.view?.setActive(true);
-    showSide(side, { rect });
+    const ready = showSide(side, { rect });
     (v3.fixed ? v3.el.querySelector('#v3Back') : v3.canvas).focus({ preventScroll: true });
+    return ready;
   }
 
   function veilTo(opacity, duration) {
@@ -531,7 +621,7 @@ export function mountSeatPreview(root, opts) {
     const ch = v3.el.querySelector('#v3Choose');
     ch.disabled = taken.has(s.id);
     ch.textContent = taken.has(s.id) ? 'Place vendue' : 'Choisir cette place';
-    if (v3.fixed) drawFixedView(v3.still, venue, s, { taken, tourGear: state.tourGear, masks: mk });
+    if (v3.fixed) drawFixedView(v3.still, venue, s, { taken: state.mode === 'concert' ? taken : emptyAudience, tourGear: state.tourGear, masks: mk });
     return v3.mask.textContent;
   }
 
@@ -548,7 +638,9 @@ export function mountSeatPreview(root, opts) {
     if (seat.id === state.selected) { announce('Cette place est déjà la place A.'); return; }
     state.compare = seat.id;
     plan.setState({ compare: seat.id });
+    const fromMenu = v3.cmpMenu.contains(document.activeElement);
     hideCompare();
+    if (fromMenu) v3.cmpBtn.focus({ preventScroll: true });
     showSide('B');
   }
 
@@ -584,9 +676,11 @@ export function mountSeatPreview(root, opts) {
       renderSheet();
       if (!v3.cmpMenu.hidden) v3.renderComparePresets();
       if (!v3.el.hidden && !v3.el.matches('.is-loading')) refreshInfo();
-      v3.view?.setAudience(taken, state.audience);
+      v3.view?.setAudience(taken, true);
     },
     open: (id, side) => openPreview(venue.byId.get(id), side),
+    openPreset,
+    openGuidedComparison,
     compare: (id) => { state.compare = id; plan.setState({ compare: id }); },
     close,
     plan,
