@@ -157,12 +157,16 @@ export class SeatPlan {
     return Math.max(0.1, Math.min((w - 32) / (2 * L.halfWidth), (h - 57) / (L.depth - this.frontInset + 0.8)));
   }
 
-  fit() {
+  _fittedView() {
     const { w, h } = this.size;
     const s = this.fitScale();
     const front = this.compact ? 43 : Math.max(43, (h - this.layout.depth * s) / 2 + 12);
     const ty = front - this.frontInset * s;
-    this.view = { s, tx: w / 2, ty };
+    return { s, tx: w / 2, ty };
+  }
+
+  fit() {
+    this.view = this._fittedView();
   }
 
   maxScale() {
@@ -185,7 +189,8 @@ export class SeatPlan {
     const v = this.view;
     this.world.setAttribute('transform', `translate(${v.tx} ${v.ty}) scale(${v.s})`);
     const { h } = this.size;
-    this.previousFitScale = this.fitScale();
+    const initial = this._fittedView();
+    this.fitted = ['s', 'tx', 'ty'].every((key) => Math.abs(v[key] - initial[key]) < 1e-4);
     const pitch = this.layout.model.seat.width * v.s;
     this.root.classList.toggle('zoomed', pitch >= MIN_TAP_PX);
     for (const it of this.railItems || []) {
@@ -201,7 +206,7 @@ export class SeatPlan {
   }
 
   getView() {
-    return { ...this.view, fitted: Math.abs(this.zoomLevel() - 1) < 1e-4 };
+    return { ...this.view, fitted: this.fitted };
   }
 
   toWorld(px, py) {
@@ -264,9 +269,8 @@ export class SeatPlan {
 
   _onResize() {
     if (!this.layout || !this.root.clientWidth) return;
-    const fitted = Math.abs(this.view.s - this.previousFitScale) < 1e-4;
     if (this.compact !== this.mobile.matches) this._drawFront();
-    if (fitted) this.fit();
+    if (this.fitted) this.fit();
     else this._clamp(this.view);
     this._apply();
   }

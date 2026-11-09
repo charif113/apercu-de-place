@@ -274,6 +274,7 @@ export class CinemaScene {
     this.wall = wallTexture();
     this.ceiling = ceilingTexture();
     for (const t of [this.carpet, this.wall, this.ceiling, ...Object.values(this.upholstery).flatMap(Object.values)]) t.userData.shared = true;
+    this.film = new DemoFilm();
     this.seatGeos = new Map();
     this.spectators = null;
     this.occupiedIds = new Set();
@@ -304,7 +305,6 @@ export class CinemaScene {
         if (material.map && !material.map.userData.shared) material.map.dispose();
         material.dispose();
       }
-      this.filmTex?.dispose();
     }
     this.layout = layout;
     this.spectators = null;
@@ -376,8 +376,9 @@ export class CinemaScene {
     hall.add(booth);
 
     // Écran(s) et extrait de démo
-    this.film = new DemoFilm();
-    const tex = (this.filmTex = this.film.texture);
+    const tex = this.film.texture;
+    this.film.start = undefined;
+    tex.offset.x = 0;
     const sc = m.screen;
     const project = projectionUv(layout);
     let scrGeo;

@@ -37,11 +37,33 @@ export function projectionUv(layout) {
 
 export class DemoFilm {
   constructor() {
-    this.texture = new THREE.TextureLoader().load(PANORAMA);
+    this.motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  async load() {
+    if (this.texture) return true;
+    const image = new Image();
+    image.src = PANORAMA;
+    let timer;
+    try {
+      await Promise.race([
+        image.decode(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Délai de chargement du panorama dépassé')), 8000);
+        }),
+      ]);
+    } catch {
+      image.removeAttribute('src');
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+    this.texture = new THREE.Texture(image);
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.anisotropy = 4;
     this.texture.userData.shared = true;
-    this.motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.texture.needsUpdate = true;
+    return true;
   }
 
   update(now) {

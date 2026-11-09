@@ -189,10 +189,10 @@ h1, h2, h3, p { margin: 0; }
 .seg { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: #101820f2; border: 1px solid #51657186; }
 .seg button { flex: 1; min-height: 40px; padding: 0 11px; border: 0; border-radius: 7px; font-weight: 650; font-size: 13px; color: #cbd7dd; background: transparent; white-space: nowrap; }
 .seg button[aria-pressed="true"] { background: #d2eee3; color: #162920; }
-.seg.sx { position: absolute; top: calc(67px + var(--safe-t)); right: 14px; }
-.look-hint { position: absolute; left: 16px; bottom: calc(16px + var(--safe-b)); font-size: 12px; color: #d5dfe5; background: #101820dd; border-radius: 20px; padding: 6px 10px; opacity: 0; pointer-events: none; }
-.view3d.settled .look-hint { animation: hint 3s ease-in-out; }
-@keyframes hint { 10%, 75% { opacity: 1; } }
+.hud .view-controls { grid-column: 1 / -1; justify-self: end; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+.view-controls .sx { pointer-events: auto; }
+.look-hint { font-size: 12px; color: #d5dfe5; background: #101820dd; border-radius: 20px; padding: 6px 10px; visibility: hidden; }
+.view3d.settled .look-hint { visibility: visible; }
 
 .sheet { position: absolute; bottom: calc(14px + var(--safe-b)); right: 14px; width: min(380px, calc(100% - 28px)); max-height: 52dvh; overflow: auto; padding: 9px; border: 1px solid #485762; border-radius: 14px; background: #151e26f5; display: grid; gap: 8px; transform: translateY(calc(100% + 30px + var(--safe-b))); transition: transform .32s ease; }
 .view3d.settled .sheet { transform: none; }
@@ -268,9 +268,8 @@ h1, h2, h3, p { margin: 0; }
   .bar > .hint, .bar > .pick { grid-column: 1 / -1; }
   .bar .sel { font-size: 12px; gap: 5px; }
   .bar .btn { font-size: 12px; padding-inline: 9px; }
-  .seg.sx { top: calc(62px + var(--safe-t)); right: auto; left: 50%; translate: -50% 0; }
+  .hud .view-controls { justify-self: center; flex-direction: column; }
   .seg.sx button { min-height: 34px; }
-  .look-hint { bottom: calc(81px + var(--safe-b)); left: 50%; translate: -50% 0; white-space: nowrap; }
   .sheet { bottom: calc(8px + var(--safe-b)); right: 8px; width: calc(100% - 16px); }
 }
 @media (max-width: 360px) {

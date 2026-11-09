@@ -128,12 +128,14 @@
       <button type="button" class="round" id="recenter" aria-label="Recentrer le regard">
         <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5"/><path d="M10 2v4m0 8v4M2 10h4m8 0h4"/></svg>
       </button>
+      <div class="view-controls">
+        <div class="seg sx" id="sxToggle" role="group" aria-label="Mode de projection ScreenX" hidden>
+          <button type="button" data-sx="0">Frontal seul</button>
+          <button type="button" data-sx="1">Étendu · côtés</button>
+        </div>
+        <p class="look-hint">Glissez pour regarder autour</p>
+      </div>
     </div>
-    <div class="seg sx" id="sxToggle" role="group" aria-label="Mode de projection ScreenX" hidden>
-      <button type="button" data-sx="0">Frontal seul</button>
-      <button type="button" data-sx="1">Étendu · côtés</button>
-    </div>
-    <p class="look-hint">Glissez pour regarder autour</p>
     <section class="sheet" id="sheet" aria-label="Détails de la place"></section>
   </div>
 

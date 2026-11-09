@@ -3,6 +3,7 @@ import { computeLayout, seatMetrics, suggestCentral, demoTaken } from './layout.
 import { SeatPlan } from './plan.js';
 import { createSeatBridge } from './bridge.js';
 import { findComparableSeat } from './hall-comparison.js';
+import { renderStill } from './fallback.js';
 
 const $ = (s) => document.querySelector(s);
 const fmt = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -35,6 +36,7 @@ let taken = new Set();
 let session = null;
 let pendingSession = null;
 let still = false;
+let projectionMissing = false;
 let previewedSeat = null;
 let roomComparison = null;
 const bridge = createSeatBridge({
@@ -175,9 +177,9 @@ function selectHall(hallId, { fromPreview = false } = {}) {
   taken = availableMask();
   if (taken.has(hs.selected)) hs.selected = null;
   if (taken.has(hs.compare)) hs.compare = null;
-  plan.setHall(layout, { taken, selected: hs.selected, compare: hs.compare, view: hs.view });
   renderSeatPicker();
   updateBar();
+  plan.setHall(layout, { taken, selected: hs.selected, compare: hs.compare, view: hs.view });
 }
 
 function availableMask() {
@@ -325,12 +327,18 @@ function planRectForCanvas() {
 
 async function preparePreviewHall() {
   still = params.get('vue') === 'fixe';
+  projectionMissing = false;
   $('#loading').hidden = false;
   try {
     if (!still) {
       const sc = await ensureScene();
-      sc.reducedMotion = $('#noMotion').checked;
-      sc.loadHall(layout);
+      projectionMissing = !(await sc.film.load());
+      if (projectionMissing) {
+        still = true;
+      } else {
+        sc.reducedMotion = $('#noMotion').checked;
+        sc.loadHall(layout);
+      }
     }
   } catch (error) {
     console.warn('Vue fixe de secours', error);
@@ -361,7 +369,7 @@ async function openPreview(seat) {
   renderSheet(seat);
   requestAnimationFrame(() => v.classList.add('shown'));
   if (still) {
-    await showStill(seat);
+    showStill(seat);
   } else {
     scene.markSeats(hs.selected, hs.compare);
     scene.setSpectators(taken, state.showSpectators);
@@ -376,17 +384,23 @@ async function openPreview(seat) {
   applyPendingSession();
 }
 
-async function showStill(seat) {
-  const { renderStill } = await import('./fallback.js');
-  renderStill($('#stillPreview'), seat, layout);
+function showStill(seat) {
+  renderStill($('#stillPreview'), seat, layout, projectionMissing);
 }
 
 async function backToPlan() {
   if (state.busy || !state.in3d) return;
   state.busy = true;
   const v = $('#view3d');
+  const returnedSeat = bookingSeat(previewedSeat.id);
+  const origin = roomComparison?.origin;
   v.classList.remove('settled');
-  if (!still) await scene.flyToPlan(planRectForCanvas());
+  if (origin && origin.layout.hall.id !== state.hallId) {
+    // Pendant le fondu, réaffiche le plan d’origine avec sa vue mémorisée.
+    selectHall(origin.layout.hall.id, { fromPreview: true });
+  } else if (!still) {
+    await scene.flyToPlan(planRectForCanvas());
+  }
   v.classList.remove('shown');
   if (!$('#noMotion').checked && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     await new Promise((r) => setTimeout(r, 320));
@@ -397,10 +411,14 @@ async function backToPlan() {
   state.in3d = false;
   state.busy = false;
   roomComparison = null;
+  if (origin) {
+    state.active = origin.active;
+    state.screenXTrial = origin.screenXTrial;
+  }
   const hs = hallState();
   plan.setStates({ taken, selected: hs.selected, compare: hs.compare });
   updateBar();
-  bridge.returned(bookingSeat(previewedSeat.id));
+  bridge.returned(returnedSeat);
   $(state.pickingB ? '#pickCancel' : '#reopen')?.focus({ preventScroll: true });
   applyPendingSession();
 }
@@ -436,7 +454,7 @@ async function moveToSeat(seat, mark = false) {
   previewedSeat = seat;
   renderSheet(seat);
   state.busy = true;
-  if (still) await showStill(seat);
+  if (still) showStill(seat);
   else await scene.flyToSeat(seat);
   state.busy = false;
   applyPendingSession();
@@ -453,7 +471,12 @@ function comparableHalls() {
 async function compareHall(hallId) {
   if (state.busy || !state.in3d || hallId === state.hallId) return;
   const { hall } = findHall(hallId);
-  const origin = roomComparison?.origin || { seat: previewedSeat, layout };
+  const origin = roomComparison?.origin || {
+    seat: previewedSeat,
+    layout,
+    active: state.active,
+    screenXTrial: state.screenXTrial,
+  };
   const result = findComparableSeat(origin.seat, origin.layout, computeLayout(hall));
   if (!result) return;
 
@@ -464,7 +487,7 @@ async function compareHall(hallId) {
   await preparePreviewHall();
   renderSheet(previewedSeat);
   if (still) {
-    await showStill(previewedSeat);
+    showStill(previewedSeat);
   } else {
     scene.markSeats(null, null);
     scene.setSpectators(taken, state.showSpectators);
